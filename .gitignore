@@ -10,3 +10,4 @@
 *.sln.docstates
 *.vcxproj.filters
 *.json
+/build_temp
