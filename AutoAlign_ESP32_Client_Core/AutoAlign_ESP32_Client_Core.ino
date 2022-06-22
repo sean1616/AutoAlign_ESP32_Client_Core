@@ -9,11 +9,11 @@
 // #include <BluetoothSerial.h>
 #include <WiFi.h>
 #include <esp_now.h>
-#include <HTTPClient.h>
+// #include <HTTPClient.h>
 #include <Wire.h>
 #include <Adafruit_ADS1X15.h>
 
-#include <ESPAsyncWebServer.h>
+// #include <ESPAsyncWebServer.h>
 
 TaskHandle_t Task_1;
 #define WDT_TIMEOUT 3
@@ -752,63 +752,63 @@ void EmergencyStop()
   PageLevel = 0;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------
-String httpGETRequest(const char *serverName)
-{
-  WiFiClient client;
-  HTTPClient http;
+// String httpGETRequest(const char *serverName)
+// {
+//   WiFiClient client;
+//   HTTPClient http;
 
-  // Your Domain name with URL path or IP address with path
-  http.begin(client, serverName);
+//   // Your Domain name with URL path or IP address with path
+//   http.begin(client, serverName);
 
-  // Send HTTP POST request
-  int httpResponseCode = http.GET();
+//   // Send HTTP POST request
+//   int httpResponseCode = http.GET();
 
-  String payload = "--";
+//   String payload = "--";
 
-  if (httpResponseCode > 0)
-  {
-    // Serial.print("HTTP Response code: ");
-    // Serial.println(httpResponseCode);
-    payload = http.getString();
-  }
-  else
-  {
-    Serial.print("Error code: ");
-    Serial.println(httpResponseCode);
-  }
-  // Free resources
-  http.end();
+//   if (httpResponseCode > 0)
+//   {
+//     // Serial.print("HTTP Response code: ");
+//     // Serial.println(httpResponseCode);
+//     payload = http.getString();
+//   }
+//   else
+//   {
+//     Serial.print("Error code: ");
+//     Serial.println(httpResponseCode);
+//   }
+//   // Free resources
+//   http.end();
 
-  return payload;
-}
+//   return payload;
+// }
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-String httpTestRequest(const char *serverName, const char *msg)
-{
-  WiFiClient client;
-  HTTPClient http;
+// String httpTestRequest(const char *serverName, const char *msg)
+// {
+//   WiFiClient client;
+//   HTTPClient http;
 
-  // Your Domain name with URL path or IP address with path
-  http.begin(client, serverName);
+//   // Your Domain name with URL path or IP address with path
+//   http.begin(client, serverName);
 
-  http.addHeader("Station", ID.c_str());
-  http.addHeader("Data", msg);
-  int httpResponseCode = http.GET();
+//   http.addHeader("Station", ID.c_str());
+//   http.addHeader("Data", msg);
+//   int httpResponseCode = http.GET();
 
-  String payload = "--";
+//   String payload = "--";
 
-  if (httpResponseCode <= 0)
-  {
-    Serial.print("Error code: ");
-    Serial.println(httpResponseCode);
-  }
+//   if (httpResponseCode <= 0)
+//   {
+//     Serial.print("Error code: ");
+//     Serial.println(httpResponseCode);
+//   }
 
-  http.end();
+//   http.end();
 
-  return payload;
-}
+//   return payload;
+// }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -5805,10 +5805,10 @@ void CMDOutput(String cmd)
   String msg = "CMD::" + cmd;
   Serial.println(msg);
 
-  if (isWiFiConnected)
-  {
-    httpTestRequest(ServerIP.c_str(), msg.c_str());
-  }
+  // if (isWiFiConnected)
+  // {
+  //   httpTestRequest(ServerIP.c_str(), msg.c_str());
+  // }
 
   // Check WiFi connection status
   // if (WiFi.status() == WL_CONNECTED)
@@ -5889,10 +5889,10 @@ void MSGOutput(String msg)
   Serial.println(msg);
 
   // Check WiFi connection status
-  if (isWiFiConnected)
-  {
-    httpTestRequest(ServerIP.c_str(), msg.c_str());
-  }
+  // if (isWiFiConnected)
+  // {
+  //   httpTestRequest(ServerIP.c_str(), msg.c_str());
+  // }
   // if (WiFi.status() == WL_CONNECTED)
   // {
   //   // Data = ServerIP + "?" + ID + "=" + msg;

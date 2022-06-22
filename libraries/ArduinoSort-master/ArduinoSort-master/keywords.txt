@@ -1,2 +1,0 @@
-sortArray	KEYWORD2
-sortArrayReverse	KEYWORD2
