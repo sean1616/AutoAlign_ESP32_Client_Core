@@ -11,3 +11,4 @@
 *.vcxproj.filters
 *.json
 /build_temp
+build__temp/
