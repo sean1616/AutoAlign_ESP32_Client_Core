@@ -1587,7 +1587,7 @@ bool Fine_Scan(int axis, bool Trip2Stop)
       MotorCC_X = digitalRead(X_DIR_Pin);
 
       CMDOutput("AS");
-      K_OK = Scan_AllRange_TwoWay(0, FS_Count_X, FS_Steps_X * MotorStepRatio, FS_Stable_X, MotorCC_X, FS_DelaySteps_X, StopValue, FS_Avg_X, FS_Trips_X, "X Fine-Scan,Trip_", false);
+      K_OK = Scan_AllRange_TwoWay(0, FS_Count_X, FS_Steps_X * MotorStepRatio, FS_Stable_X, MotorCC_X, FS_DelaySteps_X, 0, FS_Avg_X, FS_Trips_X, "X Fine-Scan,Trip_", false);
       CMDOutput("%:");
 
       if (!K_OK)
@@ -3472,6 +3472,10 @@ double AutoAlign_Scan_DirectionJudge_V2(int XYZ, int count, int Threshold, int m
   double ts = 0;
   unsigned long timer_1 = 0, timer_2 = 0;
   timer_1 = millis();
+  bool isTrip3Jump = false;
+
+  Serial.println("stableDelay: " + String(stableDelay));
+  Serial.println("motorStep: " + String(motorStep));
 
   switch (XYZ)
   {
@@ -3506,7 +3510,7 @@ double AutoAlign_Scan_DirectionJudge_V2(int XYZ, int count, int Threshold, int m
   int PD_Best_Pos = 0;
   int PD_Best_Pos_Trip2 = 0;
 
-  double PD_initial = Cal_PD_Input_IL(Get_PD_Points);
+  double PD_initial = Cal_PD_Input_IL(Get_PD_Points * 5);
   DataOutput(XYZ, PD_initial); //int xyz, double pdValue
 
   if (PD_initial >= StopPDValue)
@@ -3524,7 +3528,8 @@ double AutoAlign_Scan_DirectionJudge_V2(int XYZ, int count, int Threshold, int m
 
   delay(stableDelay);
 
-  PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+  PD_Now = Cal_PD_Input_IL(Get_PD_Points * 5);
+  PD_Now = Cal_PD_Input_IL(Get_PD_Points * 5);
   DataOutput(XYZ, PD_Now); //int xyz, double pdValue
 
   Serial.println("Initial: " + String(PD_initial) + ", After:" + String(PD_Now));
@@ -3638,16 +3643,42 @@ double AutoAlign_Scan_DirectionJudge_V2(int XYZ, int count, int Threshold, int m
         PD_Best_Pos_Trip2 = Get_Position(XYZ);
       }
 
-      if (i >= 1 && PD_Value[i] < PD_Value[i - 1]) //Condition 3
+      if (i >= 2 && PD_Value[i] < PD_Value[i - 1] && PD_Value[i-1] <= PD_Value[i - 2]) //Condition 3
       {
-        if (abs(PD_Value[i - 1] - PD_Best) < 0.8)
+        if (abs(PD_Value[i - 2] - PD_Best) < 0.8 || PD_Value[i - 2] > PD_Best)
         {
           Serial.println("Pass best IL");
           break;
         }
-      }
+      }   
 
-      if (PD_Value[i] < -53) //Condition 4
+      if (i >= 4 
+      && abs(PD_Value[i] - PD_Value[i - 1]) <=0.03 
+      && abs(PD_Value[i-1] - PD_Value[i - 2]) <=0.03 
+      && abs(PD_Value[i-2] - PD_Value[i - 3]) <=0.03 
+      && abs(PD_Value[i-3] - PD_Value[i - 4]) <=0.03 
+      ) //Condition 3 //Condition 4
+      {
+        if(PD_Value[i] < PD_Best){
+          Serial.println("ERROR Status");
+          break;
+            // return 0;
+        }
+      }     
+
+      if (i >= 4 
+      && PD_Value[i] < PD_Value[i - 1] 
+      && PD_Value[i-1] <= PD_Value[i - 2]
+      && PD_Value[i-2] <= PD_Value[i - 3]
+      && PD_Value[i-3] <= PD_Value[i - 4]
+      ) //Condition 3
+      {
+        Serial.println("Falling IL");
+        isTrip3Jump = true;
+          break;
+      }  
+
+      if (PD_Value[i] < -45) //Condition 4
       {
         Serial.println("Miss Target");
         break;
@@ -3681,6 +3712,30 @@ double AutoAlign_Scan_DirectionJudge_V2(int XYZ, int count, int Threshold, int m
     }
   }
 
+  // ----------------------------------------------Trip 3 ------------------------------------------------------------
+
+  PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+
+  if(true && PD_Now < PD_Best - 0.5 || isTrip3Jump)
+  {
+    trip++;
+    CMDOutput("~:" + msg + String(trip)); //Trip_3------------------------------------------------------------
+
+    if(PD_Best <= 3)
+    {
+      Move_Motor_abs(XYZ, Pos_Ini_Trip2); //Jump to Trip_2 start position
+      delay(150);
+      DataOutput(XYZ, Cal_PD_Input_IL(Get_PD_Points)); //int xyz, double pdValue
+    }
+
+    Move_Motor_abs(XYZ, PD_Best_Pos_Trip2); //Jump to Trip_2 start position
+    delay(100);
+
+    DataOutput(XYZ, Cal_PD_Input_IL(Get_PD_Points)); //int xyz, double pdValue
+    MSGOutput("Back to best position");
+  }
+
+
   delay(stableDelay);
 
   PD_Now = Cal_PD_Input_IL(Get_PD_Points);
@@ -3696,46 +3751,6 @@ double AutoAlign_Scan_DirectionJudge_V2(int XYZ, int count, int Threshold, int m
 
   return PD_Best;
 
-  //Back to best position
-  // BackLash_Reverse(XYZ, MotorCC, stableDelay);
-  // Serial.println("Final Reverse");
-
-  // trip++;
-  // CMDOutput("~:" + msg + String(trip));
-
-  // double pv = 0;
-  // double bv = 0;
-  // for (int k = 0; k < 35; k++)
-  // {
-  //   if (isStop)
-  //     return true;
-
-  //   step(STP_Pin, motorStep / 4, delayBetweenStep);
-  //   delay(stableDelay);
-
-  //   pv = Cal_PD_Input_IL(Get_PD_Points);
-  //   DataOutput(XYZ, pv); //int xyz, double pdValue
-
-  //   Serial.println("Reverse PD: " + String(pv));
-
-  //   if (pv >= StopPDValue)
-  //   {
-  //     Serial.println("Over StopPDValue");
-
-  //     timer_2 = millis();
-  //     ts = (timer_2 - timer_1) * 0.001;
-  //     CMDOutput("t:" + String(ts, 2));
-
-  //     PD_Best = pv;
-
-  //     return PD_Best;
-  //   }
-
-  //   if (abs(pv - PD_Best) < 3 || pv > PD_Best || (pv < bv && pv > Threshold))
-  //     break;
-  //   else
-  //     bv = pv;
-  // }
 
   timer_2 = millis();
   ts = (timer_2 - timer_1) * 0.001;
@@ -4824,7 +4839,6 @@ int Function_Excecutation(String cmd, int cmd_No)
             PD_Now = Cal_PD_Input_IL(Get_PD_Points);
             Q_Time = ((millis() - time_curing_0) / 1000);
             MSGOutput("Curing Time:" + String(Q_Time) + " s");
-            // MSGOutput("Threshold: " + String(AutoCuring_Best_IL - Acceptable_Delta_IL) + ", Now: " + String(PD_Now));
             MSGOutput("PD_Power:" + String(PD_Now)); //dB
 
             digitalWrite(Tablet_PD_mode_Trigger_Pin, false); //false is PD mode, true is Servo mode
@@ -4832,10 +4846,6 @@ int Function_Excecutation(String cmd, int cmd_No)
 
             if (Serial.available())
               cmd = Serial.readString();
-
-            // MSGOutput("ButtonSelected: " + String(ButtonSelected));
-
-            // MSGOutput("cmd in Q loop: " + String(cmd));
 
             cmd_No = Function_Classification(cmd, ButtonSelected);
 
