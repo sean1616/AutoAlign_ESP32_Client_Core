@@ -271,7 +271,7 @@ bool is_AutoCuring = false;
 bool isTrip3Jump = true;  //If station is high resolution , this value could be true;
 
 bool isWatchDog_Flag = false;
-bool isLCD = true;
+// bool isLCD = true;
 bool isLCD_Auto_Update = false;
 
 void step(byte stepperPin, long steps, int delayTime)
@@ -612,7 +612,7 @@ void CleanEEPROM(int startPosition, int datalength)
   {
     EEPROM.write(i, ' ');
   }
-  Serial.println("Clean EEPROM");
+  // Serial.println("Clean EEPROM");
 }
 
 void WriteInfoEEPROM(String data, int start_position)
@@ -694,28 +694,7 @@ char *UI_Menu_Items[MENU_ITEMS] =
      "4. Q Z-offset",
      "5. Speed",
      "6. Get Ref"};
-
-#define Speed_Page_ITEMS 4
-char *UI_Speed_Page_Items[MENU_ITEMS] =
-    {"1. X Speed",
-     "2. Y Speed",
-     "3. Z Speed",
-     "<<"};
-
-uint8_t i, h, w, title_h, H;
-
-int PageLevel = 0;
-int PageItemsCount = 1;
-
-int Top_Item_Index = 0;
-int Bottom_Item_Index = 3;
-bool ui_YesNo_Selection = false;
-
-int mainpageIndex = 0;
-
-int subpageIndex = 0;
-int subpage_itemsCount = 1;
-bool item_is_selected = false;
+ 
 bool plus_minus = false;
 
 void EmergencyStop()
@@ -724,14 +703,11 @@ void EmergencyStop()
 
   Serial.println("EmergencyStop");
   digitalWrite(Tablet_PD_mode_Trigger_Pin, true); //false is PD mode, true is Servo mode
-
-  isLCD = true;
-  PageLevel = 0;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 // uint8_t broadcastAddress[] = {0x7C, 0xDF, 0xA1, 0xF3, 0x73, 0x58}; //ESPS3 Controller addr    7C:DF:A1:F3:73:58
-uint8_t ControllerAddress[] = {0x90, 0x38, 0x0C, 0xED, 0x82, 0x28}; //Controller addr   
+uint8_t ControllerAddress[] = {0xC4, 0xDE, 0xE2, 0xC0, 0xA2, 0xD8}; //Controller addr   
 uint8_t ServerAddress[] = {0x8C, 0x4B, 0x14, 0x16, 0x35, 0x88};  //Server Mac address  #1:0x8C, 0x4B, 0x14, 0x16, 0x37, 0xF8   #2:0x8C, 0x4B, 0x14, 0x16, 0x35, 0x88
 uint8_t ThisAddress[6];  //Server Mac address  #1:0x8C, 0x4B, 0x14, 0x16, 0x37, 0xF8   #2:0x8C, 0x4B, 0x14, 0x16, 0x35, 0x88
 String ThisAddr = "";
@@ -1050,9 +1026,12 @@ void setup()
 
   eepromString = ReadInfoEEPROM(72, 8);
   Target_IL = isNumberic(eepromString) ? eepromString.toDouble() : Target_IL;
-  // Target_IL = ReadInfoEEPROM(72, 8).toDouble();
   MSGOutput("Target IL: " + String(eepromString));
   MSGOutput("Target IL: " + String(Target_IL));
+
+  eepromString = ReadInfoEEPROM(80, 8);
+  AA_ScanFinal_Scan_Delay_X_A = isNumberic(eepromString) ? eepromString.toInt() : AA_ScanFinal_Scan_Delay_X_A;
+  MSGOutput("AA_ScanFinal_Scan_Delay_X_A: " + String(AA_ScanFinal_Scan_Delay_X_A));
 
   eepromString = ReadInfoEEPROM(152, 8);
   Get_PD_Points = isNumberic(eepromString) ? eepromString.toInt() : Get_PD_Points;
@@ -1061,27 +1040,18 @@ void setup()
 
   eepromString = ReadInfoEEPROM(160, 8);
   AQ_Scan_Compensation_Steps_Z_A = isNumberic(eepromString) ? eepromString.toInt() : AQ_Scan_Compensation_Steps_Z_A;
-  // AQ_Scan_Compensation_Steps_Z_A = ReadInfoEEPROM(160, 8).toInt();
   MSGOutput("AQ_Scan_Compensation_Steps_Z_A: " + String(AQ_Scan_Compensation_Steps_Z_A));
 
   eepromString = ReadInfoEEPROM(168, 8);
   AQ_Total_TimeSpan = isNumberic(eepromString) ? eepromString.toInt() : AQ_Total_TimeSpan;
-  // AQ_Total_TimeSpan = ReadInfoEEPROM(168, 8).toInt();
   MSGOutput("AQ_Total_TimeSpan: " + String(AQ_Total_TimeSpan));
-
-  eepromString = ReadInfoEEPROM(80, 8);
-  AA_ScanFinal_Scan_Delay_X_A = isNumberic(eepromString) ? eepromString.toInt() : AA_ScanFinal_Scan_Delay_X_A;
-  // AA_ScanFinal_Scan_Delay_X_A = ReadInfoEEPROM(80, 8).toInt();
-  MSGOutput("AA_ScanFinal_Scan_Delay_X_A: " + String(AA_ScanFinal_Scan_Delay_X_A));
 
   eepromString = ReadInfoEEPROM(176, 8);
   AQ_Scan_Steps_Z_A = isNumberic(eepromString) ? eepromString.toInt() : AQ_Scan_Steps_Z_A;
-  // AQ_Scan_Steps_Z_A = ReadInfoEEPROM(176, 8).toInt();
   MSGOutput("AQ_Scan_Steps_Z_A: " + String(AQ_Scan_Steps_Z_A));
 
   eepromString = ReadInfoEEPROM(184, 8);
   AQ_Scan_Steps_Z_B = isNumberic(eepromString) ? eepromString.toInt() : AQ_Scan_Steps_Z_B;
-  // AQ_Scan_Steps_Z_B = ReadInfoEEPROM(184, 8).toInt();
   MSGOutput("AQ_Scan_Steps_Z_B: " + String(AQ_Scan_Steps_Z_B));
 
   eepromString = ReadInfoEEPROM(192, 8);
@@ -1106,92 +1076,74 @@ void setup()
 
   eepromString = ReadInfoEEPROM(EP_FS_Count_X, 8);
   FS_Count_X = isNumberic(eepromString) ? eepromString.toInt() : FS_Count_X;
-  // FS_Count_X = ReadInfoEEPROM(EP_FS_Count_X, 8).toInt();
   MSGOutput("FS_Count_X: " + String(FS_Count_X));
 
   eepromString = ReadInfoEEPROM(EP_FS_Steps_X, 8);
   FS_Steps_X = isNumberic(eepromString) ? eepromString.toInt() : FS_Steps_X;
-  // FS_Steps_X = ReadInfoEEPROM(EP_FS_Steps_X, 8).toInt();
   MSGOutput("FS_Steps_X: " + String(FS_Steps_X));
 
   eepromString = ReadInfoEEPROM(EP_FS_Stable_X, 8);
   FS_Stable_X = isNumberic(eepromString) ? eepromString.toInt() : FS_Stable_X;
-  // FS_Stable_X = ReadInfoEEPROM(EP_FS_Stable_X, 8).toInt();
   MSGOutput("FS_Stable_X: " + String(FS_Stable_X));
 
   eepromString = ReadInfoEEPROM(EP_FS_DelaySteps_X, 8);
   FS_DelaySteps_X = isNumberic(eepromString) ? eepromString.toInt() : FS_DelaySteps_X;
-  // FS_DelaySteps_X = ReadInfoEEPROM(EP_FS_DelaySteps_X, 8).toInt();
   MSGOutput("FS_DelaySteps_X: " + String(FS_DelaySteps_X));
 
   eepromString = ReadInfoEEPROM(EP_FS_Avg_X, 8);
   FS_Avg_X = isNumberic(eepromString) ? eepromString.toInt() : FS_Avg_X;
-  // FS_Avg_X = ReadInfoEEPROM(EP_FS_Avg_X, 8).toInt();
   MSGOutput("FS_Avg_X: " + String(FS_Avg_X));
 
   eepromString = ReadInfoEEPROM(EP_FS_Count_Y, 8);
   FS_Count_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_Count_Y;
-  // FS_Count_Y = ReadInfoEEPROM(EP_FS_Count_Y, 8).toInt();
   MSGOutput("FS_Count_Y: " + String(FS_Count_Y));
 
   eepromString = ReadInfoEEPROM(EP_FS_Steps_Y, 8);
   FS_Steps_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_Steps_Y;
-  // FS_Steps_Y = ReadInfoEEPROM(EP_FS_Steps_Y, 8).toInt();
   MSGOutput("FS_Steps_Y: " + String(FS_Steps_Y));
 
   eepromString = ReadInfoEEPROM(EP_FS_Stable_Y, 8);
   FS_Stable_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_Stable_Y;
-  // FS_Stable_Y = ReadInfoEEPROM(EP_FS_Stable_Y, 8).toInt();
   MSGOutput("FS_Stable_Y: " + String(FS_Stable_Y));
 
   eepromString = ReadInfoEEPROM(EP_FS_DelaySteps_Y, 8);
   FS_DelaySteps_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_DelaySteps_Y;
-  // FS_DelaySteps_Y = ReadInfoEEPROM(EP_FS_DelaySteps_Y, 8).toInt();
   MSGOutput("FS_DelaySteps_Y: " + String(FS_DelaySteps_Y));
 
   eepromString = ReadInfoEEPROM(EP_FS_Avg_Y, 8);
   FS_Avg_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_Avg_Y;
-  // FS_Avg_Y = ReadInfoEEPROM(EP_FS_Avg_Y, 8).toInt();
   MSGOutput("FS_Avg_Y: " + String(FS_Avg_Y));
 
   eepromString = ReadInfoEEPROM(EP_FS_Count_Z, 8);
   FS_Count_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_Count_Z;
-  // FS_Count_Z = ReadInfoEEPROM(EP_FS_Count_Z, 8).toInt();
   MSGOutput("FS_Count_Z: " + String(FS_Count_Z));
 
   eepromString = ReadInfoEEPROM(EP_FS_Steps_Z, 8);
   FS_Steps_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_Steps_Z;
-  // FS_Steps_Z = ReadInfoEEPROM(EP_FS_Steps_Z, 8).toInt();
   MSGOutput("FS_Steps_Z: " + String(FS_Steps_Z));
 
   eepromString = ReadInfoEEPROM(EP_FS_Stable_Z, 8);
   FS_Stable_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_Stable_Z;
-  // FS_Stable_Z = ReadInfoEEPROM(EP_FS_Stable_Z, 8).toInt();
   MSGOutput("FS_Stable_Z: " + String(FS_Stable_Z));
 
   eepromString = ReadInfoEEPROM(EP_FS_DelaySteps_Z, 8);
   FS_DelaySteps_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_DelaySteps_Z;
-  // FS_DelaySteps_Z = ReadInfoEEPROM(EP_FS_DelaySteps_Z, 8).toInt();
   MSGOutput("FS_DelaySteps_Z: " + String(FS_DelaySteps_Z));
 
   eepromString = ReadInfoEEPROM(EP_FS_Avg_Z, 8);
   FS_Avg_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_Avg_Z;
-  // FS_Avg_Z = ReadInfoEEPROM(EP_FS_Avg_Z, 8).toInt();
   MSGOutput("FS_Avg_Z: " + String(FS_Avg_Z));
 
   eepromString = ReadInfoEEPROM(EP_FS_Trips_X, 8);
   FS_Trips_X = isNumberic(eepromString) ? eepromString.toInt() : FS_Trips_X;
-  // FS_Trips_X = ReadInfoEEPROM(EP_FS_Trips_X, 8).toInt();
   MSGOutput("FS_Trips_X: " + String(FS_Trips_X));
 
   eepromString = ReadInfoEEPROM(EP_FS_Trips_Y, 8);
   FS_Trips_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_Trips_Y;
-  // FS_Trips_Y = ReadInfoEEPROM(EP_FS_Trips_Y, 8).toInt();
   MSGOutput("FS_Trips_Y: " + String(FS_Trips_Y));
 
   eepromString = ReadInfoEEPROM(EP_FS_Trips_Z, 8);
   FS_Trips_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_Trips_Z;
-  // FS_Trips_Z = ReadInfoEEPROM(EP_FS_Trips_Z, 8).toInt();
   MSGOutput("FS_Trips_Z: " + String(FS_Trips_Z));
 
   eepromString = ReadInfoEEPROM(EP_AA_ScanRough_Feed_Steps_Z_A, 8);
@@ -1217,13 +1169,6 @@ void setup()
   eepromString = ReadInfoEEPROM(EP_AA_ScanRough_Feed_Ratio_Z_D, 8);
   AA_ScanRough_Feed_Ratio_Z_D = isNumberic(eepromString) ? eepromString.toInt() : AA_ScanRough_Feed_Ratio_Z_D;
   MSGOutput("AA_ScanRough_Feed_Ratio_Z_D: " + String(AA_ScanRough_Feed_Ratio_Z_D));
-
-   //EP_PD_Ref_Array
-  // MSGOutput("PD_Ref_Array:");
-  // for (size_t i = 0; i < 15; i++)
-  // {
-  //   MSGOutput(String(PD_Ref_Array[i][0]) + ", "+ String(PD_Ref_Array[i][1]));
-  // }
 
   #pragma endregion
 
@@ -1457,8 +1402,6 @@ void Move_Motor_Cont(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int 
 String Region, msg;
 bool Fine_Scan(int axis, bool Trip2Stop)
 {
-  isLCD = true;
-
   MSGOutput("");
   MSGOutput("Fine Scan ");
 
@@ -2081,14 +2024,13 @@ void AutoAlign()
   if (isStop)
     return;
 
-  isLCD = true;
-
   Serial.println(" ");
   Serial.println("Sprial(Rough)_TimeSpan:" + String((time2 - time1) / 1000) + "s,PD:" + String(PD_LV1));
   Serial.println("Sprial(Fine)_TimeSpan:" + String((time3 - time2) / 1000) + "s,PD:" + String(PD_LV2));
   Serial.println("Scan(Rough)_TimeSpan:" + String((time4 - time3) / 1000) + "s,PD:" + String(PD_LV3));
   Serial.println("Scan(Fine)_TimeSpan:" + String((time5 - time4) / 1000) + "s,PD:" + String(PD_LV4));
   Serial.println("Auto_Align_TimeSpan:" + String((time5 - time1) / 1000) + "s");
+
   DataOutput(true);
     isWiFiConnected = Init_WifiStatus;
 }
@@ -4661,16 +4603,7 @@ int Function_Classification(String cmd, int ButtonSelected)
     else if (Contains(cmd, "UI?"))
     {
       DataSent_Controller(cmd);
-      // sendmsg_UI_Data.msg = "Core:" + cmd;
-      // sendmsg_UI_Data._Target_IL = Target_IL;
-      // sendmsg_UI_Data._ref_Dac = ref_Dac;
-      // sendmsg_UI_Data._Q_Z_offset = AQ_Scan_Compensation_Steps_Z_A;
-      // sendmsg_UI_Data._speed_x = delayBetweenStep_X;
-      // sendmsg_UI_Data._speed_y = delayBetweenStep_Y;
-      // sendmsg_UI_Data._speed_z = delayBetweenStep_Z;
-      // // Serial.println("Target_IL:" + String(Target_IL));
-
-      // esp_err_t result = esp_now_send(ControllerAddress, (uint8_t *) &sendmsg_UI_Data, sizeof(sendmsg_UI_Data));
+      
       cmd = "";
       cmd_from_contr = "";
       cmd_value_from_contr = "";
@@ -4881,7 +4814,7 @@ int Function_Excecutation(String cmd, int cmd_No)
           AutoAlign();
 
           digitalWrite(Tablet_PD_mode_Trigger_Pin, true); //false is PD mode, true is Servo mode
-          Serial.println("Auto Align End");
+          MSGOutput("Auto_Align_End");
           MotorCC = true;
 
           StopValue = 0; //0 dB
@@ -4930,7 +4863,7 @@ int Function_Excecutation(String cmd, int cmd_No)
 
           digitalWrite(Tablet_PD_mode_Trigger_Pin, true); //false is PD mode, true is Servo mode
 
-          MSGOutput("Auto Align End");
+          MSGOutput("Auto_Align_End");
 
           DataSent_Controller("Menu");
 
@@ -5016,8 +4949,6 @@ int Function_Excecutation(String cmd, int cmd_No)
               EmergencyStop();
 
             cmd = ""; //Reset command from serial port
-
-            isLCD = true;
 
             delay(998); //get data time rate
           
@@ -5284,9 +5215,6 @@ int Function_Excecutation(String cmd, int cmd_No)
 
           Target_IL = temp_targetIL;  //Re-cover Target IL value
 
-          isLCD = true;
-          PageLevel = 0;
-
           MSGOutput("Auto Q End");
 
           // updateUI(PageLevel);
@@ -5305,13 +5233,9 @@ int Function_Excecutation(String cmd, int cmd_No)
           bool initial_wifi_isConnected = isWiFiConnected;
           isWiFiConnected = false;
 
-          isLCD = true;
-
           Fine_Scan(X_Dir, false); 
 
           MSGOutput("Auto Align End");
-
-          isLCD = true;
 
           isWiFiConnected = initial_wifi_isConnected;
         }
@@ -5324,13 +5248,9 @@ int Function_Excecutation(String cmd, int cmd_No)
           bool initial_wifi_isConnected = isWiFiConnected;
           isWiFiConnected = false;
 
-          isLCD = true;
-
           Fine_Scan(Y_Dir, false); 
 
           MSGOutput("Auto Align End");
-
-          isLCD = true;
 
           isWiFiConnected = initial_wifi_isConnected;
         }
@@ -5343,13 +5263,9 @@ int Function_Excecutation(String cmd, int cmd_No)
           bool initial_wifi_isConnected = isWiFiConnected;
           isWiFiConnected = false;
 
-          isLCD = true;
-
           Fine_Scan(Z_Dir, false); 
 
           MSGOutput("Auto Align End");
-
-          isLCD = true;
 
           isWiFiConnected = initial_wifi_isConnected;
         }
@@ -5361,8 +5277,6 @@ int Function_Excecutation(String cmd, int cmd_No)
         {
           bool initial_wifi_isConnected = isWiFiConnected;
           isWiFiConnected = false;
-
-          isLCD = true;
 
           MSGOutput("");
           MSGOutput("Fine Scan ");
@@ -5390,8 +5304,6 @@ int Function_Excecutation(String cmd, int cmd_No)
 
           MSGOutput("Auto Align End");
 
-          isLCD = true;
-
           isWiFiConnected = initial_wifi_isConnected;
         }
         cmd_No = 0;
@@ -5402,8 +5314,6 @@ int Function_Excecutation(String cmd, int cmd_No)
         {
           bool initial_wifi_isConnected = isWiFiConnected;
           isWiFiConnected = false;
-
-          isLCD = true;
 
           MSGOutput("");
           MSGOutput("Fine Scan ");
@@ -5431,8 +5341,6 @@ int Function_Excecutation(String cmd, int cmd_No)
 
           MSGOutput("Auto Align End");
 
-          isLCD = true;
-
           isWiFiConnected = initial_wifi_isConnected;
         }
         cmd_No = 0;
@@ -5443,8 +5351,6 @@ int Function_Excecutation(String cmd, int cmd_No)
         {
           bool initial_wifi_isConnected = isWiFiConnected;
           isWiFiConnected = false;
-
-          isLCD = true;
 
           MSGOutput("");
           MSGOutput("Fine Scan ");
@@ -5471,8 +5377,6 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
 
           MSGOutput("Auto Align End");
-
-          isLCD = true;
 
           isWiFiConnected = initial_wifi_isConnected;
         }
@@ -5535,8 +5439,6 @@ int Function_Excecutation(String cmd, int cmd_No)
 
           digitalWrite(Tablet_PD_mode_Trigger_Pin, true); //false is PD mode, true is Servo mode
           delay(3);
-
-          isLCD = true;
         }
 
         cmd_No = 0;
@@ -5660,16 +5562,9 @@ int Function_Excecutation(String cmd, int cmd_No)
         break;
 
       case 31:
-        isLCD = true;
-        // LCD_Update_Mode = 100;
         Serial.println("LCD Re-Start");
         cmd_No = 0;
         break;
-
-      // case 51: /* Get ID */
-      //   Serial.println(ReadInfoEEPROM(8, 8));
-      //   cmd_No = 0;
-      //   break;
       }
     }
 
@@ -5951,8 +5846,6 @@ int Function_Excecutation(String cmd, int cmd_No)
         isStop = true;
         Serial.println("EmergencyStop");
         digitalWrite(Tablet_PD_mode_Trigger_Pin, true); //false is PD mode, true is Servo mode
-        isLCD = true;
-        PageLevel = 0;
         break;
 
       //Go Home
