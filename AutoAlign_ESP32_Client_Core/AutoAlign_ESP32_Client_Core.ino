@@ -150,6 +150,10 @@ int AA_ScanFinal_Scan_Delay_Y_A = 60;
 
 int AQ_Total_TimeSpan = 840;
 
+double FS_GradientTarget_X = 0.003;
+double FS_GradientTarget_Y = 0.002;
+double FS_GradientTarget_Z = 0.003;
+
 uint16_t FS_Count_X = 7;
 uint16_t FS_Steps_X = 25;
 uint16_t FS_Stable_X = 0;
@@ -206,7 +210,9 @@ uint16_t EP_FS_Avg_Z = 352;
 uint16_t EP_FS_Trips_X = 360;
 uint16_t EP_FS_Trips_Y = 368;
 uint16_t EP_FS_Trips_Z = 376;
-uint16_t EP_GradientTarget = 384;
+uint16_t EP_FS_GradientTarget_X = 384;
+uint16_t EP_FS_GradientTarget_Y = 392;
+uint16_t EP_FS_GradientTarget_Z = 400;
 
 uint16_t EP_AA_ScanRough_Feed_Steps_Z_A = 416;
 uint16_t EP_AA_ScanRough_Feed_Steps_Z_B = 424;
@@ -237,6 +243,25 @@ uint16_t EP_PD_Ref_Array[15][2];
     {10780, -40},
     {8240, -50},
   };
+
+  // double PD_Ref_Array[15][2] = 
+  // {
+  //   {24260, -3},
+  //   {23644, -4},
+  //   {23282, -6},  
+  //   {22149, -8.57}, //max -6.2 dBm
+  //   {22100, -8.77},
+  //   {20680, -11},
+  //   {19956, -13},
+  //   {19305, -15},
+  //   {18655, -17},
+  //   {17937, -19},
+  //   {17285, -21},
+  //   {15864, -25},
+  //   {14177, -30},
+  //   {10780, -40},
+  //   {8240, -50},
+  // };
 
 double averagePDInput = 0;
 
@@ -712,6 +737,7 @@ void EmergencyStop()
 // C4:DE:E2:C0:A2:D8 == A05 Controller
 
 // 8C:4B:14:16:4C:F8 == A06 Core
+// 0x90, 0x38, 0x0C, 0xED, 0x82, 0x28    A06 controller
 
 //90:38:0C:ED:6D:EC A09 controller
 //C4:DE:E2:C0:A9:6C A09 core
@@ -719,7 +745,7 @@ void EmergencyStop()
 //C0:49:EF:46:2C:58  A08 Core
 //C0:49:EF:46:2C:74  A08 Controller
 
-//C4:DE:E2:C0:A9:60  A10 controller
+//0xC4, 0xDE, 0xE2, 0xC0, 0xA9, 0x60  A10 controller
 
 // uint8_t broadcastAddress[] = {0x7C, 0xDF, 0xA1, 0xF3, 0x73, 0x58}; //ESPS3 Controller addr    7C:DF:A1:F3:73:58
 uint8_t ControllerAddress[] = {0xC4, 0xDE, 0xE2, 0xC0, 0xA9, 0x60}; //Controller addr   
@@ -787,6 +813,9 @@ void DataSent_Controller(String MSG)
 }
 
 String name_from_contr = "", cmd_from_contr = "", cmd_value_from_contr = "";
+// int cmdCount = 0;
+ unsigned long preMillis_DataRec =0;
+ unsigned long nowMillis_DataRec =0;
 
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   String ss = "";
@@ -797,7 +826,9 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   Msg = incomingReadings.cmd;
   Msg_Value = incomingReadings.value;
 
-  if( Msg != "")
+  nowMillis_DataRec = millis();
+
+  if(Msg != "")
   {
     name_from_contr = incomingReadings.contr_name;
     cmd_from_contr = Msg;
@@ -806,12 +837,33 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
     {
       cmd_value_from_contr = Msg_Value;
 
+      preMillis_DataRec = millis();
+
+      // Serial.println("NowT: " + String(millis()));
+
+      // cmdCount++;
+      // Serial.println("Timespan: " + String(millis() - preMillis_DataRec));
+      // Serial.println("Count: " + String(cmdCount) + ", cmd: " + cmd_value_from_contr);
+
       if(Msg == "BS" && Msg_Value == "0")
         EmergencyStop();
     }
     else
       Serial.println(incomingReadings.contr_name + Msg);
   } 
+
+  //If the delta time between this and last command is over 100ms, than clear the command value
+  if((millis() - preMillis_DataRec) > 200)
+  {
+    if(cmd_from_contr!= "")
+    {
+      name_from_contr = "";
+      cmd_from_contr = "";
+      cmd_value_from_contr = "";
+      // Serial.println("NowT: " + String(millis()));
+      // Serial.println("PreT: " + String(preMillis_DataRec));
+    }
+  }
 }
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
@@ -835,7 +887,7 @@ void Task_1_sendData(void *pvParameters)
     esp_now_register_recv_cb(OnDataRecv);
 
     //Task1休息，delay(1)不可省略
-    delay(10);
+    delay(50);
   }
 }
 
@@ -978,6 +1030,12 @@ void setup()
     EP_PD_Ref_Array[i][0] = iniEP;
     EP_PD_Ref_Array[i][1] = (iniEP + 8);
     iniEP += 16;
+
+    //Force Update PD Ref Array in eeprom
+    // Serial.println("Set PD_Ref_Array: " + WR_EEPROM(EP_PD_Ref_Array[i][0], String(PD_Ref_Array[i][0])));
+    //delay(100);
+    // Serial.println("Set PD_Ref_Array: " + WR_EEPROM(EP_PD_Ref_Array[i][1], String(PD_Ref_Array[i][1])));
+    //delay(100);
     
     eepromString = ReadInfoEEPROM(EP_PD_Ref_Array[i][0], 8);
     PD_Ref_Array[i][0] = isNumberic(eepromString) ? eepromString.toInt() : PD_Ref_Array[i][0];
@@ -1161,6 +1219,18 @@ void setup()
   FS_Trips_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_Trips_Z;
   MSGOutput("FS_Trips_Z: " + String(FS_Trips_Z));
 
+  eepromString = ReadInfoEEPROM(EP_FS_GradientTarget_X, 8);
+  FS_GradientTarget_X = isNumberic(eepromString) ? eepromString.toDouble() : FS_GradientTarget_X;
+  MSGOutput("FS_GradientTarget_X: " + String(FS_GradientTarget_X));
+
+  eepromString = ReadInfoEEPROM(EP_FS_GradientTarget_Y, 8);
+  FS_GradientTarget_Y = isNumberic(eepromString) ? eepromString.toDouble() : FS_GradientTarget_Y;
+  MSGOutput("FS_GradientTarget_Y: " + String(FS_GradientTarget_Y));
+
+  eepromString = ReadInfoEEPROM(EP_FS_GradientTarget_Z, 8);
+  FS_GradientTarget_Z = isNumberic(eepromString) ? eepromString.toDouble() : FS_GradientTarget_Z;
+  MSGOutput("FS_GradientTarget_Z: " + String(FS_GradientTarget_Z));
+
   eepromString = ReadInfoEEPROM(EP_AA_ScanRough_Feed_Steps_Z_A, 8);
   AA_ScanRough_Feed_Steps_Z_A = isNumberic(eepromString) ? eepromString.toInt() : AA_ScanRough_Feed_Steps_Z_A;
   MSGOutput("AA_ScanRough_Feed_Steps_Z_A: " + String(AA_ScanRough_Feed_Steps_Z_A));
@@ -1197,6 +1267,8 @@ void setup()
   DataSent_Server("ID?");
   Serial.println("isServerConnected:" + String(isWiFiConnected));
   isCheckingServer = false;
+
+  nowMillis_DataRec = millis();
 
    //在core 0啟動 mision 1
   xTaskCreatePinnedToCore(
@@ -1585,6 +1657,7 @@ void AutoAlign()
 
   delayBetweenStep = 10 * MotorStepDelayRatio;                           //default:15
   MinMotroStep = AA_SpiralRough_Spiral_Steps_XY_A  * MotorStepRatio; //2000
+
   Region = "Sprial(Rough)";
   AutoAlign_Spiral(matrix_level, -35, 0); //Input : (Sprial Level, Threshold, stable)  Threshold:42
   CMDOutput("X^");
@@ -1600,6 +1673,7 @@ void AutoAlign()
 
   delayBetweenStep = 10 * MotorStepDelayRatio;                           //default:15
   MinMotroStep = AA_SpiralRough_Spiral_Steps_XY_A / 3  * MotorStepRatio; //2000
+
   Region = "Sprial(Rough 2)";
   AutoAlign_Spiral(matrix_level, -25, 0); //Input : (Sprial Level, Threshold, stable)  Threshold:42
   CMDOutput("X^");
@@ -1667,6 +1741,7 @@ void AutoAlign()
 
     delayBetweenStep = 25 * MotorStepDelayRatio;
     MinMotroStep = AA_SpiralFine_Spiral_Steps_XY_A  * MotorStepRatio; //1500
+
     AutoAlign_Spiral(matrix_level, -37, 0);         //Input : (Sprial Level, Threshold, stable)  Threshold:166
 
     CMDOutput("X^");
@@ -1732,9 +1807,21 @@ void AutoAlign()
 
         stableDelay = 100;
         double PD_Z_before = 0;
+
+        CMDOutput("AS");      
+        CMDOutput(">>Z Feed,Trip_1");
+
+        PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+
+        DataOutput();
+        DataOutput(2, PD_Now); //int xyz, double pdValue
+        DataSent_Server("PD Power:" + String(PD_Now));
+
         for (int r = 0; r < 5; r++)
         {
           if (isStop) return;
+
+          // CMDOutput("~:Z Feed,Trip_"+ String(r+1));
 
           PD_Z_before = Cal_PD_Input_IL(Get_PD_Points);
           MSGOutput("PD_Z_before:" + String(PD_Z_before));
@@ -1762,17 +1849,20 @@ void AutoAlign()
             if (motorStep < AA_ScanRough_Feed_Steps_Z_B)
               motorStep = AA_ScanRough_Feed_Steps_Z_B; //default: 1000
 
-            MSGOutput("ratio_idx:" + String(ratio_idx));
+            MSGOutput("ratio_idx: " + String(ratio_idx));
 
             Move_Motor(Z_DIR_Pin, Z_STP_Pin, true, motorStep * MotorStepRatio, 50 * MotorStepDelayRatio, stableDelay); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
           }
 
-          MSGOutput("motorStep:" + String(motorStep));
-          MSGOutput("MotorStepRatio:" + String(MotorStepRatio));
+          MSGOutput("motorStep: " + String(motorStep));
+          // MSGOutput("MotorStepRatio:" + String(MotorStepRatio));
           MSGOutput("Z_feed:" + String(motorStep * MotorStepRatio));
-          DataOutput();
 
           PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+
+          DataOutput();
+          DataOutput(2, PD_Now); //int xyz, double pdValue
+          DataSent_Server("PD Power:" + String(PD_Now));
 
           if (PD_Now > stopValue)
             MSGOutput("Over_Stop_Value");
@@ -1786,6 +1876,8 @@ void AutoAlign()
           else
             MSGOutput("Z_feed,Now:" + String(PD_Now) + ",Before:" + String(PD_Z_before) + ",Z_Pos_Now:" + String(Z_Pos_Now));
         }
+
+        CMDOutput("%:");
       }
 
       Threshold = 120;
@@ -2072,10 +2164,12 @@ double AutoAlign_Result[3] = {0, 0, 0};
 
 bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
 {
+  #pragma region Initialization
   DataOutput(false);
   CMDOutput("ST" + String(MinMotroStep));
   Serial.println("StopValue:" + String(StopValue));
   Serial.println("stableDelay:" + String(stableDelay));
+  MSGOutput("Spiral Step:" + String(MinMotroStep));
 
   double ts = 0;
   unsigned long timer_1 = 0, timer_2 = 0;
@@ -2112,16 +2206,34 @@ bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
   PD_Best_Pos_Abs[1] = Y_Pos_Now;
   Serial.println("Inital:(" + String(X_Pos_Now) + "," + String(Y_Pos_Now) + ") = " + String(PD_BestIL));
 
+  #pragma endregion
+
   if (PD_Now >= SpiralStop_Threshold)
   {
     Serial.println("Over Threshold: " + String(PD_Now) + ", Threshold: " + String(SpiralStop_Threshold));
     return true;
   }
 
+  #pragma region Layer Loops
+
   for (int n = 1; abs(n) < (M + 1); n++)
   {
     if (isStop)
       return true;
+
+    String rsMsg = "";
+    if (Serial.available())
+    {
+      rsMsg = Serial.readString();
+      rsMsg.trim();
+      rsMsg.replace("\r", "");
+      rsMsg.replace("\n", "");
+
+      if(Contains(rsMsg, "cmd30"))
+      {
+        EmergencyStop();
+      }
+    }
 
     CMDOutput("ML");
     Serial.println("Matrix Layers: " + String(n));
@@ -2134,7 +2246,6 @@ bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
     Move_Motor(Y_DIR_Pin, Y_STP_Pin, MotorCC, MinMotroStep, delayBetweenStep, stableDelay, true);
 
     PD_Now = Cal_PD_Input_IL(Get_PD_Points);
-    // Serial.println("$[" + String(x) + "," + String(y) + "," + String(Z_Pos_Now) + "]=" + PD_Now);  //[0,-1]
     CMDOutput("$[" + String(x) + "," + String(y) + "]=" + PD_Now); //[0,-1]
 
     if (PD_Now > PD_BestIL)
@@ -2358,6 +2469,8 @@ bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
     y++;
   }
 
+  #pragma endregion
+
   CMDOutput("ML");
   Serial.println("Matrix Layers: Max");
 
@@ -2371,6 +2484,8 @@ bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
     PD_BestIL_Position[0] = 0;
     PD_BestIL_Position[1] = 0; //Jump to (0,0)
   }
+
+  #pragma region Jump to best IL position
 
   if (PD_BestIL_Position[0] <= 2 * M && PD_BestIL_Position[1] <= 2 * M)
   {
@@ -2396,6 +2511,9 @@ bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
   {
     Serial.println("Delta step out of range.");
   }
+
+  #pragma endregion
+
   return false;
 }
 
@@ -2669,21 +2787,21 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
     DIR_Pin = X_DIR_Pin;
     STP_Pin = X_STP_Pin;
     backlash = X_backlash;
-    GradientTarget = 0.003;
+    GradientTarget = FS_GradientTarget_X;  //0.003
     delay(5);
     break;
   case Y_Dir:
     DIR_Pin = Y_DIR_Pin;
     STP_Pin = Y_STP_Pin;
     backlash = Y_backlash;
-    GradientTarget = 0.002;
+    GradientTarget = FS_GradientTarget_Y;  //0.002
     delay(5);
     break;
   case Z_Dir:
     DIR_Pin = Z_DIR_Pin;
     STP_Pin = Z_STP_Pin;
     backlash = Z_backlash;
-    GradientTarget = 0.003;
+    GradientTarget = FS_GradientTarget_Z;  //0.003
     delay(5);
     break;
   }
@@ -2817,7 +2935,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
         Gradient_IL_Step[i-1] *= (FS_Steps_Z / FS_Steps_X);
       }
 
-      if(Gradient_IL_Step[i-1] <= -0.01)
+      if(Gradient_IL_Step[i-1] <= (GradientTarget*-1))
         GradientCount = 0;
       else
         GradientCount++;
@@ -4232,6 +4350,21 @@ int Function_Classification(String cmd, int ButtonSelected)
         FS_Trips_Z = cmd.toInt();
         Serial.println("Write EEPROM FS_Trips_Z: " + WR_EEPROM(EP_FS_Trips_Z, cmd));
       }
+      else if (ParaName == "FS_GradientTarget_X")
+      {
+        FS_GradientTarget_X = cmd.toInt();
+        Serial.println("Write EEPROM FS_GradientTarget_X: " + WR_EEPROM(EP_FS_GradientTarget_X, cmd));
+      }
+      else if (ParaName == "FS_GradientTarget_Y")
+      {
+        FS_GradientTarget_Y = cmd.toInt();
+        Serial.println("Write EEPROM FS_GradientTarget_Y: " + WR_EEPROM(EP_FS_GradientTarget_Y, cmd));
+      }
+      else if (ParaName == "FS_GradientTarget_Z")
+      {
+        FS_GradientTarget_Z = cmd.toInt();
+        Serial.println("Write EEPROM FS_GradientTarget_Z: " + WR_EEPROM(EP_FS_GradientTarget_Z, cmd));
+      }
     }
 
     //Set BackLash Command
@@ -4527,7 +4660,7 @@ int Function_Classification(String cmd, int ButtonSelected)
         {          
           if(idx_2 < 2)
           {
-            int value = PD_Ref_Array[idx_1][idx_2];
+            double value = PD_Ref_Array[idx_1][idx_2];
             Serial.printf("idx1:%d, idx2:%d, value:%d\n", idx_1, idx_2, value);
           }         
         }
@@ -4536,7 +4669,7 @@ int Function_Classification(String cmd, int ButtonSelected)
           idx_start = cmd.indexOf('=', idx_end) + 1;
           if (isNumberic(cmd.substring(idx_start)))
           {
-            int value = cmd.substring(idx_start).toInt();
+            double value = cmd.substring(idx_start).toInt();
             Serial.printf("idx1:%d, idx2:%d, value:%d\n", idx_1, idx_2, value);
 
             PD_Ref_Array[idx_1][idx_2] = value;
@@ -4550,11 +4683,10 @@ int Function_Classification(String cmd, int ButtonSelected)
         int iniEP = 700;
         for (size_t i = 0; i < sizeof(PD_Ref_Array) / sizeof(PD_Ref_Array[0]); i++)
         {                   
-          Serial.printf("[%d, %d]:[%d, %d]\n",  EP_PD_Ref_Array[i][0],  EP_PD_Ref_Array[i][1], PD_Ref_Array[i][0], PD_Ref_Array[i][1]);
+          Serial.printf("[%d, %d]:[%d, %d]\r",  EP_PD_Ref_Array[i][0],  EP_PD_Ref_Array[i][1], PD_Ref_Array[i][0], PD_Ref_Array[i][1]);
         }
       }
     }
-
 
     //Set PD average points
     else if (Contains(cmd, "Set_PD_average_Points:"))
@@ -4617,6 +4749,13 @@ int Function_Classification(String cmd, int ButtonSelected)
     else if (cmd == "PW_Server?")
     {
       Serial.println(ReadInfoEEPROM(120, 32));
+    }
+
+    //Re-start esp32
+    else if (cmd == "ESP_RST")
+    {
+      MSGOutput("ESP_Reset");
+      ESP.restart();
     }
 
     //Clena EEPROM : Start position (default length = 8)
@@ -5622,6 +5761,7 @@ int Function_Excecutation(String cmd, int cmd_No)
 
     //Functions: Motion
     if (cmd_No > 100)
+      
       switch (cmd_No)
       {
         // Function: Cont-------------------------------------------------------------------------
@@ -5630,7 +5770,7 @@ int Function_Excecutation(String cmd, int cmd_No)
         while (true)
         {
           MotorCC = MotorCC_Z;
-          Move_Motor_Cont(Z_DIR_Pin, Z_STP_Pin, false, 400 * MotorStepRatio, delayBetweenStep_Z);
+          Move_Motor_Cont(Z_DIR_Pin, Z_STP_Pin, false, 100 * MotorStepRatio, delayBetweenStep_Z);
           MotorCC_Z = false;
 
           if(Motor_Continous_Mode == 1)
@@ -5648,9 +5788,8 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
           else if (Motor_Continous_Mode == 3)
           {
-            if(cmd_from_contr != "BS" || cmd_value_from_contr != "101")
+            if(cmd_from_contr != "BS")
             {
-              // Serial.println("break:" + String(cmd_from_contr));
               Serial.printf("break:%s, %s\n", cmd_from_contr, cmd_value_from_contr);
               cmd_from_contr = "";
               break;
@@ -5660,11 +5799,12 @@ int Function_Excecutation(String cmd, int cmd_No)
         DataOutput();
         cmd_No = 0;
         break;
+
       case 103:
         while (true)
         {
           MotorCC = MotorCC_Z;
-          Move_Motor_Cont(Z_DIR_Pin, Z_STP_Pin, true, 400 * MotorStepRatio, delayBetweenStep_Z);
+          Move_Motor_Cont(Z_DIR_Pin, Z_STP_Pin, true, 100 * MotorStepRatio, delayBetweenStep_Z);
           MotorCC_Z = true;
 
           if(Motor_Continous_Mode == 1)
@@ -5682,9 +5822,8 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
           else if (Motor_Continous_Mode == 3)
           {
-            if(cmd_from_contr != "BS" || cmd_value_from_contr != "103")
+            if(cmd_from_contr != "BS")
             {
-              // Serial.println("break:" + String(cmd_from_contr));
               Serial.printf("break:%s, %s\n", cmd_from_contr, cmd_value_from_contr);
               cmd_from_contr = "";
               break;
@@ -5696,13 +5835,16 @@ int Function_Excecutation(String cmd, int cmd_No)
         break;
 
         //X feed - cont
-      case 102:
-
+      case 102:        
         while (true)
         {
           MotorCC = MotorCC_X;
-          Move_Motor_Cont(X_DIR_Pin, X_STP_Pin, false, 400 * MotorStepRatio, delayBetweenStep_X);
+          Move_Motor_Cont(X_DIR_Pin, X_STP_Pin, false, 100 * MotorStepRatio, delayBetweenStep_X);
           MotorCC_X = false;
+
+          // X102_count++;
+
+          // Serial.println("X102_count: " + String(X102_count));
 
          if(Motor_Continous_Mode == 1)
           {
@@ -5719,9 +5861,8 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
           else if (Motor_Continous_Mode == 3)
           {
-            if(cmd_from_contr != "BS" || cmd_value_from_contr != "102")
+            if(cmd_from_contr != "BS")
             {
-              // Serial.println("break:" + String(cmd_from_contr));
               Serial.printf("break:%s, %s\n", cmd_from_contr, cmd_value_from_contr);
               cmd_from_contr = "";
               break;
@@ -5729,17 +5870,19 @@ int Function_Excecutation(String cmd, int cmd_No)
           }                
         }
         DataOutput();
-        // Serial.println("Position : " + String(X_Pos_Now) + ", " + String(Y_Pos_Now) + ", " + String(Z_Pos_Now));
         cmd_No = 0;
         break;
         //X+ - cont
       case 105:
-
         while (true)
         {
           MotorCC = MotorCC_X;
-          Move_Motor_Cont(X_DIR_Pin, X_STP_Pin, true, 400 * MotorStepRatio, delayBetweenStep_X);
+          Move_Motor_Cont(X_DIR_Pin, X_STP_Pin, true, 100 * MotorStepRatio, delayBetweenStep_X);
           MotorCC_X = true;
+
+          // X105_count++;
+
+          // Serial.println("X105_count: " + String(X105_count));
 
           if(Motor_Continous_Mode == 1)
           {
@@ -5756,9 +5899,8 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
           else if (Motor_Continous_Mode == 3)
           {
-            if(cmd_from_contr != "BS" || cmd_value_from_contr != "105")
+            if(cmd_from_contr != "BS")
             {
-              // Serial.println("break:" + String(cmd_from_contr));
               Serial.printf("break:%s, %s\n", cmd_from_contr, cmd_value_from_contr);
               cmd_from_contr = "";
               break;
@@ -5766,7 +5908,6 @@ int Function_Excecutation(String cmd, int cmd_No)
           }      
         }
         DataOutput();
-        // Serial.println("Position : " + String(X_Pos_Now) + ", " + String(Y_Pos_Now) + ", " + String(Z_Pos_Now));
         cmd_No = 0;
         break;
 
@@ -5776,7 +5917,7 @@ int Function_Excecutation(String cmd, int cmd_No)
         while (true)
         {
           MotorCC = MotorCC_Y;
-          Move_Motor_Cont(Y_DIR_Pin, Y_STP_Pin, false, 400 * MotorStepRatio, delayBetweenStep_Y);
+          Move_Motor_Cont(Y_DIR_Pin, Y_STP_Pin, false, 100 * MotorStepRatio, delayBetweenStep_Y);
           MotorCC_Y = false;
 
           if(Motor_Continous_Mode == 1)
@@ -5794,9 +5935,8 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
           else if (Motor_Continous_Mode == 3)
           {
-            if(cmd_from_contr != "BS" || cmd_value_from_contr != "106")
+            if(cmd_from_contr != "BS")
             {
-              // Serial.println("break:" + String(cmd_from_contr));
               Serial.printf("break:%s, %s\n", cmd_from_contr, cmd_value_from_contr);
               cmd_from_contr = "";
               break;
@@ -5804,7 +5944,6 @@ int Function_Excecutation(String cmd, int cmd_No)
           }      
         }
         DataOutput();
-        // Serial.println("Position : " + String(X_Pos_Now) + ", " + String(Y_Pos_Now) + ", " + String(Z_Pos_Now));
         cmd_No = 0;
         break;
 
@@ -5814,7 +5953,7 @@ int Function_Excecutation(String cmd, int cmd_No)
         while (true)
         {
           MotorCC = MotorCC_Y;
-          Move_Motor_Cont(Y_DIR_Pin, Y_STP_Pin, true, 400 * MotorStepRatio, delayBetweenStep_Y);
+          Move_Motor_Cont(Y_DIR_Pin, Y_STP_Pin, true, 100 * MotorStepRatio, delayBetweenStep_Y);
           MotorCC_Y = true;
 
           if(Motor_Continous_Mode == 1)
@@ -5832,9 +5971,8 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
           else if (Motor_Continous_Mode == 3)
           {
-            if(cmd_from_contr != "BS" || cmd_value_from_contr != "104")
+            if(cmd_from_contr != "BS")
             {
-              // Serial.println("break:" + String(cmd_from_contr));
               Serial.printf("break:%s, %s\n", cmd_from_contr, cmd_value_from_contr);
               cmd_from_contr = "";
               break;
@@ -5842,7 +5980,6 @@ int Function_Excecutation(String cmd, int cmd_No)
           }               
         }
         DataOutput();
-        // Serial.println("Position : " + String(X_Pos_Now) + ", " + String(Y_Pos_Now) + ", " + String(Z_Pos_Now));
         cmd_No = 0;
         break;
 
