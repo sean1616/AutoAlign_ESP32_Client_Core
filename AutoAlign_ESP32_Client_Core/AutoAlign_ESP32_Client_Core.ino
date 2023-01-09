@@ -837,7 +837,7 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
     {
       cmd_value_from_contr = Msg_Value;
 
-      preMillis_DataRec = millis();
+      // preMillis_DataRec = millis();
 
       // Serial.println("NowT: " + String(millis()));
 
@@ -853,17 +853,17 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   } 
 
   //If the delta time between this and last command is over 100ms, than clear the command value
-  if((millis() - preMillis_DataRec) > 200)
-  {
-    if(cmd_from_contr!= "")
-    {
-      name_from_contr = "";
-      cmd_from_contr = "";
-      cmd_value_from_contr = "";
-      // Serial.println("NowT: " + String(millis()));
-      // Serial.println("PreT: " + String(preMillis_DataRec));
-    }
-  }
+  // if((millis() - preMillis_DataRec) > 200)
+  // {
+  //   if(cmd_from_contr!= "")
+  //   {
+  //     name_from_contr = "";
+  //     cmd_from_contr = "";
+  //     cmd_value_from_contr = "";
+  //     // Serial.println("NowT: " + String(millis()));
+  //     // Serial.println("PreT: " + String(preMillis_DataRec));
+  //   }
+  // }
 }
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
@@ -905,6 +905,7 @@ void setup()
   ads.setGain(GAIN_TWO);        // 2x gain   +/- 2.048V  1 bit = 0.0625mV
   if (!ads.begin(0x48, &I2CADS)) {
     Serial.println("Failed to initialize ADS.");
+    isGetPower = false;
   }  
 
 #pragma region : WiFi Server Setting
@@ -1257,9 +1258,9 @@ void setup()
 
   #pragma endregion
 
-  Cal_PD_Input_IL(Get_PD_Points);
+  // Cal_PD_Input_IL(Get_PD_Points);
 
-  Serial.println("Get_PD_Points:" + String(Get_PD_Points));
+  // Serial.println("Get_PD_Points:" + String(Get_PD_Points));
 
   // Check Server is connected
   isWiFiConnected = true;
@@ -4960,7 +4961,7 @@ int Function_Excecutation(String cmd, int cmd_No)
 
   if (cmd_No != 0)
   {
-    Serial.println("Btn:" + String(ButtonSelected) + ", CMD:" + String(cmd_No));
+    // Serial.println("Btn:" + String(ButtonSelected) + ", CMD:" + String(cmd_No));
 
     //Functions: Alignment
     if (cmd_No <= 100)
@@ -5788,12 +5789,7 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
           else if (Motor_Continous_Mode == 3)
           {
-            if(cmd_from_contr != "BS")
-            {
-              Serial.printf("break:%s, %s\n", cmd_from_contr, cmd_value_from_contr);
-              cmd_from_contr = "";
-              break;
-            }
+            if(Motor_Feed_Mode_StopJudge()) break;
           }      
         }
         DataOutput();
@@ -5822,12 +5818,7 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
           else if (Motor_Continous_Mode == 3)
           {
-            if(cmd_from_contr != "BS")
-            {
-              Serial.printf("break:%s, %s\n", cmd_from_contr, cmd_value_from_contr);
-              cmd_from_contr = "";
-              break;
-            }
+            if(Motor_Feed_Mode_StopJudge()) break;
           }    
         }
         DataOutput();
@@ -5861,12 +5852,7 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
           else if (Motor_Continous_Mode == 3)
           {
-            if(cmd_from_contr != "BS")
-            {
-              Serial.printf("break:%s, %s\n", cmd_from_contr, cmd_value_from_contr);
-              cmd_from_contr = "";
-              break;
-            }
+            if(Motor_Feed_Mode_StopJudge()) break;
           }                
         }
         DataOutput();
@@ -5899,12 +5885,7 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
           else if (Motor_Continous_Mode == 3)
           {
-            if(cmd_from_contr != "BS")
-            {
-              Serial.printf("break:%s, %s\n", cmd_from_contr, cmd_value_from_contr);
-              cmd_from_contr = "";
-              break;
-            }
+            if(Motor_Feed_Mode_StopJudge()) break;
           }      
         }
         DataOutput();
@@ -5935,12 +5916,7 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
           else if (Motor_Continous_Mode == 3)
           {
-            if(cmd_from_contr != "BS")
-            {
-              Serial.printf("break:%s, %s\n", cmd_from_contr, cmd_value_from_contr);
-              cmd_from_contr = "";
-              break;
-            }
+            if(Motor_Feed_Mode_StopJudge()) break;
           }      
         }
         DataOutput();
@@ -5971,12 +5947,7 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
           else if (Motor_Continous_Mode == 3)
           {
-            if(cmd_from_contr != "BS")
-            {
-              Serial.printf("break:%s, %s\n", cmd_from_contr, cmd_value_from_contr);
-              cmd_from_contr = "";
-              break;
-            }
+            if(Motor_Feed_Mode_StopJudge()) break;
           }               
         }
         DataOutput();
@@ -6050,6 +6021,40 @@ int Function_Excecutation(String cmd, int cmd_No)
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
+
+
+bool Motor_Feed_Mode_StopJudge()
+{
+    // if(Serial.available())
+    // {
+    //   String ss= Serial.readString();
+    //   ss.trim();
+    //   ss.replace("\r", "");
+    //   ss.replace("\n", "");
+    //   if(ss == "CMDNOW")
+    //   {
+    //     Serial.printf("cmdnow: %s, %s\n", cmd_from_contr, cmd_value_from_contr);
+    //   }
+    // }
+
+    if(abs(millis() - nowMillis_DataRec) > 230)
+    {
+      Serial.println("timeFeedStart:" + String(abs(millis() - nowMillis_DataRec)));
+      return true;
+    }
+
+    if(cmd_from_contr != "BS" )
+    {
+      Serial.printf("break:%s, %s", cmd_from_contr, cmd_value_from_contr);
+      cmd_from_contr = "";
+
+      return true;
+    }
+
+    return false;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
