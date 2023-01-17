@@ -748,7 +748,7 @@ void EmergencyStop()
 //0xC4, 0xDE, 0xE2, 0xC0, 0xA9, 0x60  A10 controller
 
 // uint8_t broadcastAddress[] = {0x7C, 0xDF, 0xA1, 0xF3, 0x73, 0x58}; //ESPS3 Controller addr    7C:DF:A1:F3:73:58
-uint8_t ControllerAddress[] = {0xC4, 0xDE, 0xE2, 0xC0, 0xA9, 0x60}; //Controller addr   
+uint8_t ControllerAddress[] = {0x90, 0x38, 0x0C, 0xED, 0x82, 0x28}; //Controller addr   
 uint8_t ServerAddress[] = {0x8C, 0x4B, 0x14, 0x16, 0x35, 0x88};  //Server Mac address  #1:0x8C, 0x4B, 0x14, 0x16, 0x37, 0xF8   #2:0x8C, 0x4B, 0x14, 0x16, 0x35, 0x88
 uint8_t ThisAddress[6];  //Server Mac address  #1:0x8C, 0x4B, 0x14, 0x16, 0x37, 0xF8   #2:0x8C, 0x4B, 0x14, 0x16, 0x35, 0x88
 String ThisAddr = "";
@@ -5119,7 +5119,7 @@ int Function_Excecutation(String cmd, int cmd_No)
             else
             {
               MSGOutput("QT_IL:" + String(Q_Time)+ " s, " + String(PD_Now));
-               MSGOutput("Z_ScanSTP : " + String(Z_ScanSTP));
+              //  MSGOutput("Z_ScanSTP : " + String(Z_ScanSTP));
             }
 
             String(PD_Now).toCharArray(sendmsg_UI_Data.para, 30);
@@ -5222,9 +5222,9 @@ int Function_Excecutation(String cmd, int cmd_No)
                 if(Acceptable_Delta_IL > 0.2 )
                 {
                   if(StopValue > -1.3)
-                    Acceptable_Delta_IL = 0.2; // Target IL changed 0.25
+                    Acceptable_Delta_IL = 0.15; // Target IL changed 0.2
                   else
-                    Acceptable_Delta_IL = 0.12; // Target IL changed 0.25
+                    Acceptable_Delta_IL = 0.12; // Target IL changed 0.12
 
                   MSGOutput("Update Scan Condition: " + String(Acceptable_Delta_IL));     
                 }
@@ -6045,7 +6045,7 @@ bool Motor_Feed_Mode_StopJudge()
 
     if(cmd_from_contr != "BS" )
     {
-      Serial.printf("break:%s, %s", cmd_from_contr, cmd_value_from_contr);
+      Serial.printf("break:%s, %s\n", cmd_from_contr, cmd_value_from_contr);
       cmd_from_contr = "";
 
       return true;
