@@ -616,21 +616,22 @@ void EmergencyStop()
 }
 //------------------------------------------------------------------------------------------------------------------------------------------
 // 90:38:0C:ED:82:28 == A06 Controller
-// C4:DE:E2:C0:A2:D8 == A05 Controller
+// 0xC4, 0xDE, 0xE2, 0xC0, 0xA2, 0xD8   A05 Controller
 
 // 8C:4B:14:16:4C:F8 == A06 Core
 // 0x90, 0x38, 0x0C, 0xED, 0x82, 0x28    A06 controller
 
-//90:38:0C:ED:6D:EC A09 controller
-//C4:DE:E2:C0:A9:6C A09 core
+// 0x8C, 0x4B, 0x14, 0x16, 0xD8, 0xD0    A07 controller
 
-//C0:49:EF:46:2C:58  A08 Core
-//C0:49:EF:46:2C:74  A08 Controller
+//90:38:0C:ED:6D:EC A09 controller
+
+//0xC0, 0x49, 0xEF, 0x46, 0x2C, 0x74  A08 Controller
+
+//0x90, 0x38, 0x0C, 0xED, 0x6D, 0xEC  A09 Controller
 
 //0xC4, 0xDE, 0xE2, 0xC0, 0xA9, 0x60  A10 controller
 
-// uint8_t broadcastAddress[] = {0x7C, 0xDF, 0xA1, 0xF3, 0x73, 0x58}; //ESPS3 Controller addr    7C:DF:A1:F3:73:58
-uint8_t ControllerAddress[] = {0x90, 0x38, 0x0C, 0xED, 0x82, 0x28}; //Controller addr   
+uint8_t ControllerAddress[] = {0xC4, 0xDE, 0xE2, 0xC0, 0xA9, 0x60}; //Controller addr   
 uint8_t ServerAddress[] = {0x8C, 0x4B, 0x14, 0x16, 0x35, 0x88};  //Server Mac address  #1:0x8C, 0x4B, 0x14, 0x16, 0x37, 0xF8   #2:0x8C, 0x4B, 0x14, 0x16, 0x35, 0x88
 uint8_t ThisAddress[6];  //Server Mac address  #1:0x8C, 0x4B, 0x14, 0x16, 0x37, 0xF8   #2:0x8C, 0x4B, 0x14, 0x16, 0x35, 0x88
 String ThisAddr = "";
@@ -1456,7 +1457,10 @@ void AutoAlign()
 {
   StopValue = Target_IL;
 
-  Move_Motor(Z_DIR_Pin, Z_STP_Pin, false, AA_SpiralRough_Feed_Steps_Z_A * MotorStepRatio, 12 * MotorStepDelayRatio, 150); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
+  if(Station_Type == 0)
+    Move_Motor(Z_DIR_Pin, Z_STP_Pin, false, AA_SpiralRough_Feed_Steps_Z_A * MotorStepRatio, 12 * MotorStepDelayRatio, 150); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
+  else if (Station_Type == 1)
+    Move_Motor(Z_DIR_Pin, Z_STP_Pin, false, AA_SpiralRough_Feed_Steps_Z_A * MotorStepRatio, 12 * MotorStepDelayRatio, 150); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
 
   unsigned long time1 = 0, time2 = 0, time3 = 0, time4 = 0, time5 = 0, time6 = 0, time7 = 0;
   double PD_LV1, PD_LV2, PD_LV3, PD_LV4, PD_LV5, PD_LV6;
@@ -1694,7 +1698,7 @@ void AutoAlign()
           if (PD_Now > stopValue)
             MSGOutput("Over_Stop_Value");
 
-          if (PD_Now <= PD_Z_before || (PD_Z_before - PD_Now) > 30 || (abs(PD_Z_before - PD_Now) <= 1.5 && PD_Now > -10))
+          if (PD_Now <= PD_Z_before || (PD_Z_before - PD_Now) > 30 || (abs(PD_Z_before - PD_Now) <= 1 && PD_Now > -10))
           {
             MSGOutput("Z_feed_break,Now:" + String(PD_Now) + ",Before:" + String(PD_Z_before) + ",Z_Pos_Now:" + String(Z_Pos_Now));
             MSGOutput(" ");
@@ -4924,21 +4928,13 @@ int Function_Excecutation(String cmd, int cmd_No)
           ButtonSelected = -1;
 
           double IL_stable_count = 0;
-          double Acceptable_Delta_IL = 0.3; //12,10, 2
+          double Acceptable_Delta_IL = 0.3; //0.3 for ctf
           unsigned long lastUpdateQT = 0;
           Q_Time = 0;
 
           time_curing_0 = millis();
           time_curing_1 = time_curing_0;
           time_curing_2 = time_curing_1;
-
-          if(Station_Type == 1)
-          {
-            digitalWrite(Heater_Start_Pin, true);
-            Serial.println("Heater Start");
-            delay(300);
-            digitalWrite(Heater_Start_Pin, false);
-          }
 
           digitalWrite(Tablet_PD_mode_Trigger_Pin, false); //false is PD mode, true is Servo mode
           delay(155);
@@ -4959,7 +4955,33 @@ int Function_Excecutation(String cmd, int cmd_No)
           MSGOutput("Auto-Curing");
           CMDOutput("AQ");                             // Auto_Curing Start
           CMDOutput("QT" + String(AQ_Total_TimeSpan)); // Auto_Curing Start
-          MSGOutput("StopValue : " + String(StopValue));
+          // MSGOutput("StopValue : " + String(StopValue));
+          // MSGOutput("Target_IL : " + String((Target_IL - (Acceptable_Delta_IL))));
+
+          //VOA Station
+          if(Station_Type == 1)
+          {
+            Acceptable_Delta_IL = 0.05;
+
+            StopValue = (Target_IL - (Acceptable_Delta_IL));  
+            MSGOutput("StopValue : " + String(StopValue));
+            MSGOutput("Target_IL : " + String((Target_IL - (Acceptable_Delta_IL))));
+
+            digitalWrite(Heater_Start_Pin, true);
+            MSGOutput("Heater Start");
+            delay(600);
+            digitalWrite(Heater_Start_Pin, false);
+
+            //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
+            Move_Motor(Z_DIR_Pin, Z_STP_Pin, false, 30, 12 * MotorStepDelayRatio, 350); 
+
+            MSGOutput("Z offset 0.5 um");
+          }
+          else
+          {
+            MSGOutput("StopValue : " + String(StopValue));
+            MSGOutput("Target_IL : " + String((Target_IL - (Acceptable_Delta_IL))));
+          }
 
           while (true)
           {
@@ -4968,6 +4990,8 @@ int Function_Excecutation(String cmd, int cmd_No)
               digitalWrite(Tablet_PD_mode_Trigger_Pin, false); //false is PD mode, true is Servo mode
               delay(2);
             }
+
+            delay(50);
 
             PD_Now = Cal_PD_Input_IL(Get_PD_Points);
             Q_Time = ((millis() - time_curing_0) / 1000);
@@ -5005,40 +5029,74 @@ int Function_Excecutation(String cmd, int cmd_No)
             //Q State
             if (true)
             {
-              if (Q_Time <= 540)  // 540
+              //VOA Station
+              if(Station_Type == 1)
               {
                 Q_State = 1;
               }
-              else if (Q_Time > 540 && Q_Time <= 600)  //540, 600
+
+              //CTF Station
+              else 
               {
-                Q_State = 2;
-              }
-              else if (Q_Time > 600 && Q_Time <= 700)  //600, 700
-              {
-                Q_State = 3;
-              }
-              else if (Q_Time > 700)  //700
-              {
-                Q_State = 4;
+                if (Q_Time <= 540)  // 540
+                {
+                  Q_State = 1;
+                }
+                else if (Q_Time > 540 && Q_Time <= 600)  //540, 600
+                {
+                  Q_State = 2;
+                }
+                else if (Q_Time > 600 && Q_Time <= 700)  //600, 700
+                {
+                  Q_State = 3;
+                }
+                else if (Q_Time > 700)  //700
+                {
+                  Q_State = 4;
+                }
               }
             }
 
             //Q Stop Conditions
             if (true)
             {
-              //IL Stable Time ,  70 secs,  curing time threshold , 12.5 mins
-              if (time_curing_2 - time_curing_1 > 70000 && Q_Time >= 860 && !isStopAlign) // 800
+              //VOA Station
+              if(Station_Type == 1)
               {
-                MSGOutput("Update : IL Stable - Stop Auto Curing");
-                isStopAlign = true;
+                //Auto Align time threshold ,  3 mins
+                if (Q_Time >= 240 && !isStopAlign) // 800
+                {
+                  MSGOutput("Update : Stop Auto Align");
+                  isStopAlign = true;
+                }
+
+                //Total curing time , 10 mins, 600s
+                if (Q_Time >= AQ_Total_TimeSpan - 1)
+                {
+                  MSGOutput("Curing Time's up - Stop Auto Curing");
+                  isStop = true;
+                  break;
+                }
               }
-              //Total curing time , 14 mins, 840s
-              else if (Q_Time >= AQ_Total_TimeSpan - 1)
+
+              //CTF Station
+              else
               {
-                MSGOutput("Over Limit Curing Time - Stop Auto Curing");
-                isStop = true;
-                break;
+                //IL Stable Time ,  70 secs,  curing time threshold , 12.5 mins
+                if (time_curing_2 - time_curing_1 > 70000 && Q_Time >= 860 && !isStopAlign) // 800
+                {
+                  MSGOutput("Update : IL Stable - Stop Auto Curing");
+                  isStopAlign = true;
+                }
+                //Total curing time , 14 mins, 840s
+                else if (Q_Time >= AQ_Total_TimeSpan - 1)
+                {
+                  MSGOutput("Over Limit Curing Time - Stop Auto Curing");
+                  isStop = true;
+                  break;
+                }
               }
+
             }
 
             if (isStop)
@@ -5123,6 +5181,8 @@ int Function_Excecutation(String cmd, int cmd_No)
 
                     Fine_Scan(X_Dir, false); //--------------------------------------------------------Q Scan X
 
+                    PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+
                     Q_Time = ((millis() - time_curing_0) / 1000);
                     MSGOutput("QT_IL:" + String(Q_Time)+ " s, " + String(PD_Now));
                     String(PD_Now).toCharArray(sendmsg_UI_Data.para, 30);
@@ -5133,6 +5193,8 @@ int Function_Excecutation(String cmd, int cmd_No)
                       DataSent_Controller("Scan");
 
                       Fine_Scan(X_Dir, false); //------------------------------------------------------Q Scan X
+
+                      PD_Now = Cal_PD_Input_IL(Get_PD_Points);
 
                       Q_Time = ((millis() - time_curing_0) / 1000);
                       MSGOutput("QT_IL:" + String(Q_Time)+ " s, " + String(PD_Now));
@@ -5162,6 +5224,8 @@ int Function_Excecutation(String cmd, int cmd_No)
                     DataSent_Controller("Scan");
 
                     Fine_Scan(Y_Dir, false); //--------------------------------------------------------Q Scan Y
+
+                    PD_Now = Cal_PD_Input_IL(Get_PD_Points);
 
                     Q_Time = ((millis() - time_curing_0) / 1000);
                     MSGOutput("QT_IL:" + String(Q_Time)+ " s, " + String(PD_Now));
@@ -5196,42 +5260,45 @@ int Function_Excecutation(String cmd, int cmd_No)
 
                   bool K_OK = true;
 
-                  //Into Q Scan Z
-                   # pragma region Q Scan Z
-                  if (PD_Now < (AutoCuring_Best_IL - Acceptable_Delta_IL) || forcedAlign)
+                  //Into Q Scan Z (CTF Station)
+                  if(Station_Type == 0)
                   {
-                    //-----------------------------------------------------------Q Scan Z
-
-                    DataSent_Controller("Scan");
-
-                    digitalWrite(Tablet_PD_mode_Trigger_Pin, false); //false is PD mode, true is Servo mode
-                    delay(5);
-
-                    CMDOutput("AS");
-                    K_OK = Scan_AllRange_TwoWay(2, FS_Count_Z, Z_ScanSTP, FS_Stable_Z, 0, FS_DelaySteps_Z, StopValue, FS_Avg_Z, FS_Trips_Z, "Z Scan,Trip_");
-                    CMDOutput("%:");
-
-                    Q_Time = ((millis() - time_curing_0) / 1000);
-                    MSGOutput("QT_IL:" + String(Q_Time)+ " s, " + String(PD_Now));
-                    String(PD_Now).toCharArray(sendmsg_UI_Data.para, 30);
-                    DataSent_Controller("AQ");
-                    
-                    if (!K_OK)
+                    # pragma region Q Scan Z
+                    if (PD_Now < (AutoCuring_Best_IL - Acceptable_Delta_IL) || forcedAlign)
                     {
+                      //-----------------------------------------------------------Q Scan Z
+
                       DataSent_Controller("Scan");
 
+                      digitalWrite(Tablet_PD_mode_Trigger_Pin, false); //false is PD mode, true is Servo mode
+                      delay(5);
+
                       CMDOutput("AS");
-                      Scan_AllRange_TwoWay(2, FS_Count_Z, Z_ScanSTP, FS_Stable_Z, 0, FS_DelaySteps_Z, StopValue, FS_Avg_Z, FS_Trips_Z, "Z Re-Scan,Trip_");
+                      K_OK = Scan_AllRange_TwoWay(2, FS_Count_Z, Z_ScanSTP, FS_Stable_Z, 0, FS_DelaySteps_Z, StopValue, FS_Avg_Z, FS_Trips_Z, "Z Scan,Trip_");
                       CMDOutput("%:");
 
                       Q_Time = ((millis() - time_curing_0) / 1000);
                       MSGOutput("QT_IL:" + String(Q_Time)+ " s, " + String(PD_Now));
                       String(PD_Now).toCharArray(sendmsg_UI_Data.para, 30);
                       DataSent_Controller("AQ");
-                    }
-                  }
-                  #pragma endregion
+                      
+                      if (!K_OK)
+                      {
+                        DataSent_Controller("Scan");
 
+                        CMDOutput("AS");
+                        Scan_AllRange_TwoWay(2, FS_Count_Z, Z_ScanSTP, FS_Stable_Z, 0, FS_DelaySteps_Z, StopValue, FS_Avg_Z, FS_Trips_Z, "Z Re-Scan,Trip_");
+                        CMDOutput("%:");
+
+                        Q_Time = ((millis() - time_curing_0) / 1000);
+                        MSGOutput("QT_IL:" + String(Q_Time)+ " s, " + String(PD_Now));
+                        String(PD_Now).toCharArray(sendmsg_UI_Data.para, 30);
+                        DataSent_Controller("AQ");
+                      }
+                    }
+                    #pragma endregion
+                  }
+                  
                   digitalWrite(Tablet_PD_mode_Trigger_Pin, false); //false is PD mode, true is Servo mode
                   delay(5);
                   
@@ -5240,7 +5307,8 @@ int Function_Excecutation(String cmd, int cmd_No)
 
                 PD_Now = Cal_PD_Input_IL(Get_PD_Points);
 
-                if (abs(PD_Before - PD_Now) < 0.3 && Q_Time > 750)
+                //IL stable count (CTF Station only)
+                if (abs(PD_Before - PD_Now) < 0.3 && Q_Time > 750 && Station_Type == 0)
                 {
                   IL_stable_count++;
 
@@ -5264,11 +5332,12 @@ int Function_Excecutation(String cmd, int cmd_No)
           StopValue = Target_IL;
           digitalWrite(Tablet_PD_mode_Trigger_Pin, true); //false is PD mode, true is Servo mode
 
+          //VOA Station
           if(Station_Type == 1)
           {
             digitalWrite(Heater_Stop_Pin, true);
             Serial.println("Heater Stop");
-            delay(300);
+            delay(600);
             digitalWrite(Heater_Stop_Pin, false);
           }
 
@@ -5280,10 +5349,13 @@ int Function_Excecutation(String cmd, int cmd_No)
 
           MSGOutput("Auto Q End");
 
-          // updateUI(PageLevel);
-          DataSent_Controller("Menu");
+          if(Station_Type == 0)
+          {
+             // updateUI(PageLevel);
+            DataSent_Controller("Menu");
 
-          MSGOutput("LCD Re-Start");
+            MSGOutput("LCD Re-Start");
+          }
 
           Q_Time = 0;
         }
