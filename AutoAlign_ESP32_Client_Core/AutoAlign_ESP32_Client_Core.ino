@@ -18,8 +18,8 @@ String Station_ID = "A00";
 
 const byte X_STP_Pin = 15; // x軸 步進控制Pulse
 const byte X_DIR_Pin = 2;  // X軸 步進馬達方向控制
-const byte Y_STP_Pin = 0;  // y軸 步進控制Pulse (Pin 0 is for boot) 0 => 5
-const byte Y_DIR_Pin = 4;  // y軸 步進馬達方向控制 4 => 18
+const byte Y_STP_Pin = 5;  // y軸 步進控制Pulse (Pin 0 is for boot) 0 => 5
+const byte Y_DIR_Pin = 18; // y軸 步進馬達方向控制 4 => 18
 const byte Z_STP_Pin = 16; // z軸 步進控制Pulse
 const byte Z_DIR_Pin = 17; // z軸 步進馬達方向控制
 
@@ -139,7 +139,7 @@ double FS_GradientTarget_Y = 0.002;
 double FS_GradientTarget_Z = 0.003;
 
 /// @brief 0 is CTF, 1 is VOA-Heater, 2 is VOA-No Heater, 3 is 3D Switch
-byte Station_Type = 0;
+byte Station_Type = 2;
 
 uint16_t FS_Count_X = 7;
 uint16_t FS_Steps_X = 25;
@@ -1146,6 +1146,8 @@ void setup()
   motorType = Phase_5;
   if (motorType == HomeMade)
     isTrip3Jump = false;
+
+  DataOutput(false);
 }
 
 bool isMsgShow = false;
@@ -1561,6 +1563,11 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT = 10)
       Count_Step = Count_Step % ratio_max;
   }
 
+  MSGOutput("Delta:");
+  MSGOutput(String(Delta_X));
+  MSGOutput(String(Delta_Y));
+  MSGOutput(String(Delta_Z));
+
   // // Position Record
   Pos_Now.X = TargetPos.X;
   Pos_Now.Y = TargetPos.Y;
@@ -1789,7 +1796,7 @@ void AutoAlign()
   if (Station_Type == 0)
     Move_Motor(Z_DIR_Pin, Z_STP_Pin, false, AA_SpiralRough_Feed_Steps_Z_A * MotorStepRatio, 12 * MotorStepDelayRatio, 150); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
   else if (Station_Type == 1 || Station_Type == 2)
-    Move_Motor(Z_DIR_Pin, Z_STP_Pin, false, AA_SpiralRough_Feed_Steps_Z_A / 2 * MotorStepRatio, 12 * MotorStepDelayRatio, 150); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
+    Move_Motor(Z_DIR_Pin, Z_STP_Pin, false, AA_SpiralRough_Feed_Steps_Z_A / 6 * MotorStepRatio, 12 * MotorStepDelayRatio, 150); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
 
   unsigned long time1 = 0, time2 = 0, time3 = 0, time4 = 0, time5 = 0, time6 = 0, time7 = 0;
   double PD_LV1, PD_LV2, PD_LV3, PD_LV4, PD_LV5, PD_LV6;
@@ -4292,19 +4299,21 @@ int Function_Classification(String cmd, int ButtonSelected)
       int travel_x = 0, travel_y = 0, travel_z = 0;
 
       travel_x = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd.substring(0, cmd.indexOf('_'))); // xyz
+      // Serial.println(cmd.substring(0, cmd.indexOf('_'))); // x
 
       cmd.remove(0, cmd.indexOf('_') + 1);
 
       travel_y = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd.substring(0, cmd.indexOf('_'))); // xyz
+      // Serial.println(cmd.substring(0, cmd.indexOf('_'))); // y
 
       cmd.remove(0, cmd.indexOf('_') + 1);
 
       travel_z = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd.substring(0, cmd.indexOf('_'))); // xyz
+      // Serial.println(cmd.substring(0, cmd.indexOf('_'))); // z
 
       Move_Motor_abs_all(travel_x, travel_y, travel_z);
+
+      DataOutput(false);
     }
 
 #pragma endregion
