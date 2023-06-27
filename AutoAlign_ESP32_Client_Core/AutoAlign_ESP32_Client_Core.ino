@@ -18,8 +18,8 @@ String Station_ID = "A00";
 
 const byte X_STP_Pin = 15; // x軸 步進控制Pulse
 const byte X_DIR_Pin = 2;  // X軸 步進馬達方向控制
-const byte Y_STP_Pin = 5;  // y軸 步進控制Pulse 0(Pin 0 is for boot)
-const byte Y_DIR_Pin = 18; // y軸 步進馬達方向控制 4
+const byte Y_STP_Pin = 0;  // y軸 步進控制Pulse (Pin 0 is for boot) 0 => 5
+const byte Y_DIR_Pin = 4;  // y軸 步進馬達方向控制 4 => 18
 const byte Z_STP_Pin = 16; // z軸 步進控制Pulse
 const byte Z_DIR_Pin = 17; // z軸 步進馬達方向控制
 
@@ -56,13 +56,23 @@ int M_Level = 10;
 /// @brief 1: button,  2: cmd, 3:controller btn
 byte Motor_Continous_Mode = 1;
 
+typedef struct struct_Motor_Pos
+{
+  long X = 0;
+  long Y = 0;
+  long Z = 0;
+} struct_Motor_Pos;
+
+struct_Motor_Pos Pos_Now;
+// struct_Motor_Pos TargetPos;
+
 int xyz = 0;
 long X_Pos_Record = 0;
 long Y_Pos_Record = 0;
 long Z_Pos_Record = 0;
-long X_Pos_Now = 0;
-long Y_Pos_Now = 0;
-long Z_Pos_Now = 0;
+// long X_Pos_Now = 0;
+// long Y_Pos_Now = 0;
+// long Z_Pos_Now = 0;
 long Z_Pos_reLoad = 0;
 
 int X_backlash = 0;
@@ -129,7 +139,7 @@ double FS_GradientTarget_Y = 0.002;
 double FS_GradientTarget_Z = 0.003;
 
 /// @brief 0 is CTF, 1 is VOA-Heater, 2 is VOA-No Heater, 3 is 3D Switch
-byte Station_Type = 1;
+byte Station_Type = 0;
 
 uint16_t FS_Count_X = 7;
 uint16_t FS_Steps_X = 25;
@@ -291,6 +301,9 @@ void step(byte stepperPin, long steps, int delayTime)
     delayMicroseconds(delayTime);
     digitalWrite(stepperPin, LOW);
     delayMicroseconds(delayTime);
+
+    if (isStop)
+      break;
   }
 
   // Position Record
@@ -299,15 +312,15 @@ void step(byte stepperPin, long steps, int delayTime)
     switch (stepperPin)
     {
     case X_STP_Pin:
-      X_Pos_Now += steps;
+      Pos_Now.X += steps;
       MotorCC_X = true;
       break;
     case Y_STP_Pin:
-      Y_Pos_Now += steps;
+      Pos_Now.Y += steps;
       MotorCC_Y = true;
       break;
     case Z_STP_Pin:
-      Z_Pos_Now += steps;
+      Pos_Now.Z += steps;
       MotorCC_Z = true;
       break;
     }
@@ -317,15 +330,15 @@ void step(byte stepperPin, long steps, int delayTime)
     switch (stepperPin)
     {
     case X_STP_Pin:
-      X_Pos_Now -= steps;
+      Pos_Now.X -= steps;
       MotorCC_X = false;
       break;
     case Y_STP_Pin:
-      Y_Pos_Now -= steps;
+      Pos_Now.Y -= steps;
       MotorCC_Y = false;
       break;
     case Z_STP_Pin:
-      Z_Pos_Now -= steps;
+      Pos_Now.Z -= steps;
       MotorCC_Z = false;
       break;
     }
@@ -351,15 +364,15 @@ void step(byte stepperPin, long steps, int delayTime, byte dirPin, bool dir)
     switch (stepperPin)
     {
     case X_STP_Pin:
-      X_Pos_Now += steps;
+      Pos_Now.X += steps;
       MotorCC_X = true;
       break;
     case Y_STP_Pin:
-      Y_Pos_Now += steps;
+      Pos_Now.Y += steps;
       MotorCC_Y = true;
       break;
     case Z_STP_Pin:
-      Z_Pos_Now += steps;
+      Pos_Now.Z += steps;
       MotorCC_Z = true;
       break;
     }
@@ -369,15 +382,15 @@ void step(byte stepperPin, long steps, int delayTime, byte dirPin, bool dir)
     switch (stepperPin)
     {
     case X_STP_Pin:
-      X_Pos_Now -= steps;
+      Pos_Now.X -= steps;
       MotorCC_X = false;
       break;
     case Y_STP_Pin:
-      Y_Pos_Now -= steps;
+      Pos_Now.Y -= steps;
       MotorCC_Y = false;
       break;
     case Z_STP_Pin:
-      Z_Pos_Now -= steps;
+      Pos_Now.Z -= steps;
       MotorCC_Z = false;
       break;
     }
@@ -758,7 +771,10 @@ void Task_1_sendData(void *pvParameters)
   while (true)
   {
     // Call ESP-Now receive data function
-    esp_now_register_recv_cb(OnDataRecv);
+    if (Station_Type == 0)
+      esp_now_register_recv_cb(OnDataRecv);
+
+    CheckStop();
 
     // Task1休息，delay(1)不可省略
     delay(50);
@@ -1242,57 +1258,354 @@ void loop()
 void Move_Motor_abs(int xyz, long Target)
 {
   String axis = "";
-  long Pos_Now = 0;
+  long Pos_N = 0;
   switch (xyz)
   {
   case 0:
     MotorDir_Pin = X_DIR_Pin;
     MotorSTP_Pin = X_STP_Pin;
-    Pos_Now = X_Pos_Now;
+    Pos_N = Pos_Now.X;
     axis = "X";
     break;
   case 1:
     MotorDir_Pin = Y_DIR_Pin;
     MotorSTP_Pin = Y_STP_Pin;
-    Pos_Now = Y_Pos_Now;
+    Pos_N = Pos_Now.Y;
     axis = "Y";
     break;
   case 2:
     MotorDir_Pin = Z_DIR_Pin;
     MotorSTP_Pin = Z_STP_Pin;
-    Pos_Now = Z_Pos_Now;
+    Pos_N = Pos_Now.Z;
     axis = "Z";
     break;
   }
 
-  if (Target - Pos_Now < 0)
+  if (Target - Pos_N < 0)
     MotorCC = false;
-  else if (Target - Pos_Now > 0)
+  else if (Target - Pos_N > 0)
     MotorCC = true;
   else
     return;
 
   delayBetweenStep = 20;
-  MinMotroStep = abs(Target - Pos_Now);
+  MinMotroStep = abs(Target - Pos_N);
 
-  MSGOutput(axis + " Go to position: " + String(Target) + ", origin position: " + String(Pos_Now));
+  MSGOutput("Abs:" + axis + ":From " + String(Pos_N) + " to " + String(Target));
 
-  // byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep, int stableDelay
   Move_Motor(MotorDir_Pin, MotorSTP_Pin, MotorCC, MinMotroStep, delayBetweenStep, 0);
 }
 
-void Move_Motor_abs_all(int x, int y, int z)
+void Move_Motor_abs_async(struct_Motor_Pos TargetPos, int DelayT = 40)
 {
-  Move_Motor_abs(0, x);
-  Move_Motor_abs(1, y);
-  Move_Motor_abs(2, z);
+  long Delta_X = TargetPos.X - Pos_Now.X;
+  long Delta_Y = TargetPos.Y - Pos_Now.Y;
+  long Delta_Z = TargetPos.Z - Pos_Now.Z;
+
+  // 判斷方向
+  if (Delta_X > 0)
+    MotorCC_X = true;
+  else if (Delta_X < 0)
+    MotorCC_X = false;
+
+  if (Delta_Y > 0)
+    MotorCC_Y = true;
+  else if (Delta_Y < 0)
+    MotorCC_Y = false;
+
+  if (Delta_Z > 0)
+    MotorCC_Z = true;
+  else if (Delta_Z < 0)
+    MotorCC_Z = false;
+
+  // 設定軸方向
+  if (Delta_X != 0)
+    digitalWrite(X_DIR_Pin, MotorCC_X);
+
+  if (Delta_Y != 0)
+    digitalWrite(Y_DIR_Pin, MotorCC_Y);
+
+  if (Delta_Z != 0)
+    digitalWrite(Z_DIR_Pin, MotorCC_Z);
+
+  delay(3);
+
+  // 計算分時時間
+  byte MoveAxisCount = 0;
+
+  bool is_X = false;
+  bool is_Y = false;
+  bool is_Z = false;
+
+  if (Delta_X != 0)
+  {
+    MoveAxisCount++;
+    is_X = true;
+  }
+
+  if (Delta_Y != 0)
+  {
+    MoveAxisCount++;
+    is_Y = true;
+  }
+
+  if (Delta_Z != 0)
+  {
+    MoveAxisCount++;
+    is_Z = true;
+  }
+
+  if (MoveAxisCount == 0)
+    return;
+
+  delayBetweenStep = DelayT / MoveAxisCount;
+
+  // 分時多工
+
+  Delta_X = abs(Delta_X);
+  Delta_Y = abs(Delta_Y);
+  Delta_Z = abs(Delta_Z);
+
+  double max = (Delta_X > Delta_Y) ? ((Delta_X > Delta_Z) ? Delta_X : Delta_Z) : ((Delta_Y > Delta_Z) ? Delta_Y : Delta_Z);
+
+  for (size_t i = 0; i < max; i++)
+  {
+    if (is_X)
+    {
+      digitalWrite(X_STP_Pin, HIGH);
+      delayMicroseconds(delayBetweenStep);
+      digitalWrite(X_STP_Pin, LOW);
+      delayMicroseconds(delayBetweenStep);
+
+      Delta_X--;
+      if (Delta_X == 0)
+        is_X = false;
+    }
+
+    if (is_Y)
+    {
+      digitalWrite(Y_STP_Pin, HIGH);
+      delayMicroseconds(delayBetweenStep);
+      digitalWrite(Y_STP_Pin, LOW);
+      delayMicroseconds(delayBetweenStep);
+
+      Delta_Y--;
+      if (Delta_Y == 0)
+        is_Y = false;
+    }
+
+    if (is_Z)
+    {
+      digitalWrite(Z_STP_Pin, HIGH);
+      delayMicroseconds(delayBetweenStep);
+      digitalWrite(Z_STP_Pin, LOW);
+      delayMicroseconds(delayBetweenStep);
+
+      Delta_Z--;
+      if (Delta_Z == 0)
+        is_Z = false;
+    }
+  }
+
+  // // Position Record
+  Pos_Now.X = TargetPos.X;
+  Pos_Now.Y = TargetPos.Y;
+  Pos_Now.Z = TargetPos.Z;
+}
+
+void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT = 10)
+{
+  long Delta_X = TargetPos.X - Pos_Now.X;
+  long Delta_Y = TargetPos.Y - Pos_Now.Y;
+  long Delta_Z = TargetPos.Z - Pos_Now.Z;
+
+  // 判斷方向
+  if (Delta_X > 0)
+    MotorCC_X = true;
+  else if (Delta_X < 0)
+    MotorCC_X = false;
+
+  if (Delta_Y > 0)
+    MotorCC_Y = true;
+  else if (Delta_Y < 0)
+    MotorCC_Y = false;
+
+  if (Delta_Z > 0)
+    MotorCC_Z = true;
+  else if (Delta_Z < 0)
+    MotorCC_Z = false;
+
+  // 設定軸方向
+  if (Delta_X != 0)
+    digitalWrite(X_DIR_Pin, MotorCC_X);
+
+  if (Delta_Y != 0)
+    digitalWrite(Y_DIR_Pin, MotorCC_Y);
+
+  if (Delta_Z != 0)
+    digitalWrite(Z_DIR_Pin, MotorCC_Z);
+
+  delay(3);
+
+  // 計算分時時間
+  byte MoveAxisCount = 0;
+
+  bool is_X = false;
+  bool is_Y = false;
+  bool is_Z = false;
+
+  if (Delta_X != 0)
+  {
+    MoveAxisCount++;
+    is_X = true;
+  }
+
+  if (Delta_Y != 0)
+  {
+    MoveAxisCount++;
+    is_Y = true;
+  }
+
+  if (Delta_Z != 0)
+  {
+    MoveAxisCount++;
+    is_Z = true;
+  }
+
+  if (MoveAxisCount == 0)
+  {
+    MSGOutput("Delta Distance All 0");
+    return;
+  }
+  // else
+  // {
+  //   MSGOutput("Delta Distance ");
+  //   MSGOutput(String(Delta_X));
+  //   MSGOutput(String(Delta_Y));
+  //   MSGOutput(String(Delta_Z));
+  // }
+
+  // delayBetweenStep = 10; // Target Speed
+  // int Delay = DelayT;
+
+  // 分時多工
+  Delta_X = abs(Delta_X);
+  Delta_Y = abs(Delta_Y);
+  Delta_Z = abs(Delta_Z);
+
+  long max = (Delta_X > Delta_Y) ? ((Delta_X > Delta_Z) ? Delta_X : Delta_Z) : ((Delta_Y > Delta_Z) ? Delta_Y : Delta_Z);
+
+  int ratio_X = Delta_X == 0 ? 1 : (max / Delta_X);
+  int ratio_Y = Delta_Y == 0 ? 1 : (max / Delta_Y);
+  int ratio_Z = Delta_Z == 0 ? 1 : (max / Delta_Z);
+
+  int ratio_max = (ratio_X > ratio_Y) ? ((ratio_X > ratio_Z) ? ratio_X : ratio_Z) : ((ratio_Y > ratio_Z) ? ratio_Y : ratio_Z);
+
+  int Count_Step = 1;
+
+  bool is_X_Temp = false;
+  bool is_Y_Temp = false;
+  bool is_Z_Temp = false;
+
+  // int MinDelay = DelayT;
+
+  for (size_t i = 0; i < max; i++)
+  {
+    is_X_Temp = Count_Step % ratio_X == 0 ? true : false;
+    is_Y_Temp = Count_Step % ratio_Y == 0 ? true : false;
+    is_Z_Temp = Count_Step % ratio_Z == 0 ? true : false;
+
+    if (is_X && is_X_Temp)
+      digitalWrite(X_STP_Pin, HIGH);
+    if (is_Y && is_Y_Temp)
+      digitalWrite(Y_STP_Pin, HIGH);
+    if (is_Z && is_Z_Temp)
+      digitalWrite(Z_STP_Pin, HIGH);
+
+    delayMicroseconds(DelayT);
+
+    if (is_X && is_X_Temp)
+    {
+      digitalWrite(X_STP_Pin, LOW);
+
+      Delta_X--;
+      if (Delta_X == 0)
+        is_X = false;
+    }
+
+    if (is_Y && is_Y_Temp)
+    {
+      digitalWrite(Y_STP_Pin, LOW);
+
+      Delta_Y--;
+      if (Delta_Y == 0)
+        is_Y = false;
+    }
+
+    if (is_Z && is_Z_Temp)
+    {
+      digitalWrite(Z_STP_Pin, LOW);
+
+      Delta_Z--;
+      if (Delta_Z == 0)
+        is_Z = false;
+    }
+
+    delayMicroseconds(DelayT);
+
+    // if (Delay < MinDelay)
+    //   MinDelay = Delay;
+
+    Count_Step++;
+    if (Count_Step > ratio_max)
+      Count_Step = Count_Step % ratio_max;
+  }
+
+  // // Position Record
+  Pos_Now.X = TargetPos.X;
+  Pos_Now.Y = TargetPos.Y;
+  Pos_Now.Z = TargetPos.Z;
+
+  // MSGOutput("Min Delay :" + String(MinDelay));
+}
+
+void Move_Motor_abs_all(int x, int y, int z, int DelayT = 10)
+{
+  // Separate move axis
+  //  Move_Motor_abs(0, x);
+  //  Move_Motor_abs(1, y);
+  //  Move_Motor_abs(2, z);
+
+  // MSGOutput("Abs All Sync");
+
+  struct_Motor_Pos TargetPos;
+  TargetPos.X = x;
+  TargetPos.Y = y;
+  TargetPos.Z = z;
+  Move_Motor_abs_sync(TargetPos, DelayT);
+
+  // MSGOutput("Move All Abs End");
+}
+
+void Move_Motor_abs_all(int x, int y, int z, bool IsMsg, int DelayT = 10)
+{
+  MSGOutput("Move All Abs Sync Start");
+
+  struct_Motor_Pos TargetPos;
+  TargetPos.X = x;
+  TargetPos.Y = y;
+  TargetPos.Z = z;
+  Move_Motor_abs_sync(TargetPos, DelayT);
+
+  if (IsMsg)
+    MSGOutput("Move All Abs End");
 }
 
 void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep, int stableDelay)
 {
   MotorCC = dirt;
   digitalWrite(dir_pin, dirt);
-  delay(2);
+  delay(3);
   if (moveSteps > 0)
   {
     step(stp_pin, moveSteps, delayStep);
@@ -1305,7 +1618,7 @@ void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delay
 {
   MotorCC = dirt;
   digitalWrite(dir_pin, dirt);
-  delay(5);
+  delay(3);
   if (moveSteps > 0)
   {
     step(stp_pin, moveSteps, delayStep);
@@ -1742,12 +2055,12 @@ void AutoAlign()
 
           if (PD_Now <= PD_Z_before || (PD_Z_before - PD_Now) > 30 || (abs(PD_Z_before - PD_Now) <= 0.5 && PD_Now > -10))
           {
-            MSGOutput("Z_feed_break,Now:" + String(PD_Now) + ",Before:" + String(PD_Z_before) + ",Z_Pos_Now:" + String(Z_Pos_Now));
+            MSGOutput("Z_feed_break,Now:" + String(PD_Now) + ",Before:" + String(PD_Z_before) + ",Z:" + String(Pos_Now.Z));
             MSGOutput(" ");
             break;
           }
           else
-            MSGOutput("Z_feed,Now:" + String(PD_Now) + ",Before:" + String(PD_Z_before) + ",Z_Pos_Now:" + String(Z_Pos_Now));
+            MSGOutput("Z_feed,Now:" + String(PD_Now) + ",Before:" + String(PD_Z_before) + ",Z:" + String(Pos_Now.Z));
         }
 
         CMDOutput("%:");
@@ -1931,15 +2244,15 @@ void AutoAlign()
 
         if (i == 1)
         {
-          X_pos_before = X_Pos_Now;
-          Y_pos_before = Y_Pos_Now;
+          X_pos_before = Pos_Now.X;
+          Y_pos_before = Pos_Now.Y;
         }
         else if (i > 1)
         {
-          delta_X = X_Pos_Now - X_pos_before;
-          delta_Y = Y_Pos_Now - Y_pos_before;
-          X_pos_before = X_Pos_Now;
-          Y_pos_before = Y_Pos_Now;
+          delta_X = Pos_Now.X - X_pos_before;
+          delta_Y = Pos_Now.Y - Y_pos_before;
+          X_pos_before = Pos_Now.X;
+          Y_pos_before = Pos_Now.Y;
           Serial.println("------- Delta_X:" + String(delta_X) + ",Delta_Y:" + String(delta_Y));
         }
 
@@ -2089,9 +2402,9 @@ bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
   PD_BestIL = PD_Now;
   PD_BestIL_Position[0] = x;
   PD_BestIL_Position[1] = y;
-  PD_Best_Pos_Abs[0] = X_Pos_Now;
-  PD_Best_Pos_Abs[1] = Y_Pos_Now;
-  Serial.println("Inital:(" + String(X_Pos_Now) + "," + String(Y_Pos_Now) + ") = " + String(PD_BestIL));
+  PD_Best_Pos_Abs[0] = Pos_Now.X;
+  PD_Best_Pos_Abs[1] = Pos_Now.Y;
+  Serial.println("Inital:(" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + ") = " + String(PD_BestIL));
 
 #pragma endregion
 
@@ -2108,20 +2421,6 @@ bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
     CheckStop();
     if (isStop)
       return false;
-
-    // String rsMsg = "";
-    // if (Serial.available())
-    // {
-    //   rsMsg = Serial.readString();
-    //   rsMsg.trim();
-    //   rsMsg.replace("\r", "");
-    //   rsMsg.replace("\n", "");
-
-    //   if(Contains(rsMsg, "cmd30"))
-    //   {
-    //     EmergencyStop();
-    //   }
-    // }
 
     CMDOutput("ML");
     Serial.println("Matrix Layers: " + String(n));
@@ -2141,8 +2440,8 @@ bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
       PD_BestIL = PD_Now;
       PD_BestIL_Position[0] = x;
       PD_BestIL_Position[1] = y;
-      PD_Best_Pos_Abs[0] = X_Pos_Now;
-      PD_Best_Pos_Abs[1] = Y_Pos_Now;
+      PD_Best_Pos_Abs[0] = Pos_Now.X;
+      PD_Best_Pos_Abs[1] = Pos_Now.Y;
 
       if (PD_Now >= SpiralStop_Threshold)
       {
@@ -2180,9 +2479,9 @@ bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
         PD_BestIL_Position[0] = x;
         PD_BestIL_Position[1] = y;
         Serial.println("Best IL Update : (" + String(PD_BestIL_Position[0]) + "," + String(PD_BestIL_Position[1]) + ") = " + String(PD_BestIL));
-        Serial.println("(" + String(X_Pos_Now) + "," + String(Y_Pos_Now) + ") = " + String(PD_BestIL));
-        PD_Best_Pos_Abs[0] = X_Pos_Now;
-        PD_Best_Pos_Abs[1] = Y_Pos_Now;
+        Serial.println("(" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + ") = " + String(PD_BestIL));
+        PD_Best_Pos_Abs[0] = Pos_Now.X;
+        PD_Best_Pos_Abs[1] = Pos_Now.Y;
 
         if (abs(PD_BestIL_Position[0]) >= 100 || abs(PD_BestIL_Position[1]) >= 100)
         {
@@ -2232,9 +2531,9 @@ bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
         PD_BestIL_Position[0] = x;
         PD_BestIL_Position[1] = y;
         Serial.println("Best IL Update : (" + String(PD_BestIL_Position[0]) + "," + String(PD_BestIL_Position[1]) + ") = " + String(PD_BestIL));
-        Serial.println("(" + String(X_Pos_Now) + "," + String(Y_Pos_Now) + ") = " + String(PD_BestIL));
-        PD_Best_Pos_Abs[0] = X_Pos_Now;
-        PD_Best_Pos_Abs[1] = Y_Pos_Now;
+        Serial.println("(" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + ") = " + String(PD_BestIL));
+        PD_Best_Pos_Abs[0] = Pos_Now.X;
+        PD_Best_Pos_Abs[1] = Pos_Now.Y;
 
         if (abs(PD_BestIL_Position[0]) >= 100 || abs(PD_BestIL_Position[1]) >= 100)
         {
@@ -2282,9 +2581,9 @@ bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
         PD_BestIL_Position[0] = x;
         PD_BestIL_Position[1] = y;
         Serial.println("Best IL Update : (" + String(PD_BestIL_Position[0]) + "," + String(PD_BestIL_Position[1]) + ") = " + String(PD_BestIL));
-        Serial.println("(" + String(X_Pos_Now) + "," + String(Y_Pos_Now) + ") = " + String(PD_BestIL));
-        PD_Best_Pos_Abs[0] = X_Pos_Now;
-        PD_Best_Pos_Abs[1] = Y_Pos_Now;
+        Serial.println("(" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + ") = " + String(PD_BestIL));
+        PD_Best_Pos_Abs[0] = Pos_Now.X;
+        PD_Best_Pos_Abs[1] = Pos_Now.Y;
 
         if (abs(PD_BestIL_Position[0]) >= 100 || abs(PD_BestIL_Position[1]) >= 100)
         {
@@ -2332,9 +2631,9 @@ bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
         PD_BestIL_Position[0] = x;
         PD_BestIL_Position[1] = y;
         Serial.println("Best IL Update : (" + String(PD_BestIL_Position[0]) + "," + String(PD_BestIL_Position[1]) + ") = " + String(PD_BestIL));
-        Serial.println("(" + String(X_Pos_Now) + "," + String(Y_Pos_Now) + ") = " + String(PD_BestIL));
-        PD_Best_Pos_Abs[0] = X_Pos_Now;
-        PD_Best_Pos_Abs[1] = Y_Pos_Now;
+        Serial.println("(" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + ") = " + String(PD_BestIL));
+        PD_Best_Pos_Abs[0] = Pos_Now.X;
+        PD_Best_Pos_Abs[1] = Pos_Now.Y;
 
         if (abs(PD_BestIL_Position[0]) >= 100 || abs(PD_BestIL_Position[1]) >= 100)
         {
@@ -2390,7 +2689,7 @@ bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
     double finalIL = Cal_PD_Input_IL(Get_PD_Points);
     Serial.println("Final IL : " + String(finalIL));
 
-    Serial.println("Position : " + String(X_Pos_Now) + ", " + String(Y_Pos_Now) + ", " + String(Z_Pos_Now));
+    Serial.println("Position : " + String(Pos_Now.X) + ", " + String(Pos_Now.Y) + ", " + String(Pos_Now.Z));
 
     AutoAlign_Result[0] = PD_BestIL_Position[0];
     AutoAlign_Result[1] = PD_BestIL_Position[1];
@@ -2601,7 +2900,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
       else
         GradientCount++;
 
-      if (i > 5)
+      if (i > 4)
       {
         if (PD_Value[i] > -2 && Gradient_IL_Step[i - 1] <= GradientTarget && GradientCount > 3) // default: -1.6
         {
@@ -2851,7 +3150,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
   int deltaPos = 0;
   int BestPos = 0;
 
-  if (motorType == HomeMade || true)
+  if (true)
   {
     // Best IL in Trip 2
     if (IL_Best_Trip2 > IL_Best_Trip1 && (IL_Best_Trip2 - IL_Best_Trip1) > 0.05 && Trips != 1)
@@ -3510,11 +3809,11 @@ double AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int Threshold, i
 
     long pNow = PD_Best_Pos_Trip2;
     if (xyz == 0)
-      pNow = X_Pos_Now;
+      pNow = Pos_Now.X;
     else if (xyz == 1)
-      pNow = Y_Pos_Now;
+      pNow = Pos_Now.Y;
     else if (xyz == 2)
-      pNow = Z_Pos_Now;
+      pNow = Pos_Now.Z;
 
     if (PD_Best_Pos_Trip2 != pNow)
     {
@@ -3882,54 +4181,35 @@ int Function_Classification(String cmd, int ButtonSelected)
 
 // Keyboard - Motor Control
 #pragma region - Keyboard - Motor Control
-    // if (cmd == "Xp1")
-    // {
-    //   cmd_No = 102;
-    // }
-    // else if (cmd == "Xm1")
-    // {
-    //   cmd_No = 105;
-    // }
-    // else if (cmd == "Yp1")
-    // {
-    //   cmd_No = 104;
-    // }
-    // else if (cmd == "Ym1")
-    // {
-    //   cmd_No = 106;
-    // }
-    // else if (cmd == "Zp1")
-    // {
-    //   cmd_No = 103;
-    // }
-    // else if (cmd == "Zm1")
-    // {
-    //   cmd_No = 101;
-    // }
-
     if (cmd == "Xp")
     {
       cmd_No = 102;
+      return cmd_No;
     }
     else if (cmd == "Xm")
     {
       cmd_No = 105;
+      return cmd_No;
     }
     else if (cmd == "Yp")
     {
       cmd_No = 104;
+      return cmd_No;
     }
     else if (cmd == "Ym")
     {
       cmd_No = 106;
+      return cmd_No;
     }
     else if (cmd == "Zp")
     {
       cmd_No = 103;
+      return cmd_No;
     }
     else if (cmd == "Zm")
     {
       cmd_No = 101;
+      return cmd_No;
     }
 
     // Jog
@@ -4537,6 +4817,17 @@ int Function_Classification(String cmd, int ButtonSelected)
       }
     }
 
+    // Get IL Command
+    else if (cmd == "IL?")
+    {
+      // digitalWrite(Tablet_PD_mode_Trigger_Pin, false); // false is PD mode, true is Servo mode
+      // delay(5);
+
+      MSGOutput("IL:" + String(Cal_PD_Input_IL(Get_PD_Points)));
+
+      // digitalWrite(Tablet_PD_mode_Trigger_Pin, true); // false is PD mode, true is Servo mode
+    }
+
     // Get Ref Command
     else if (cmd == "REF?" || cmd == "Ref?" || cmd == "ref?")
     {
@@ -4602,7 +4893,7 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Get Motor position now
     else if (Contains(cmd, "POS?"))
     {
-      MSGOutput("Position:" + String(X_Pos_Now) + "," + String(Y_Pos_Now) + "," + String(Z_Pos_Now));
+      MSGOutput("Position:" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z));
     }
 
     // //Set Manual Control Motor Speed
@@ -4676,29 +4967,7 @@ int Function_Classification(String cmd, int ButtonSelected)
       MSGOutput("Set Motor Speed:" + cmd);
     }
 
-    // Move motor to abs position sync
-    //  else if (Contains(cmd, "GSP "))
-    //  {
-    //    cmd.remove(0, 4);
-    //    if(cmd == "1")
-    //    {
-    //      Move_Motor_abs_all_sync(Pos_1_Record.X_Pos, Pos_1_Record.Y_Pos, Pos_1_Record.Z_Pos);
-    //    }
-    //    else if (cmd =="2")
-    //    {
-    //      Move_Motor_abs_all_sync(Pos_2_Record.X_Pos, Pos_2_Record.Y_Pos, Pos_2_Record.Z_Pos);
-    //    }
-    //    else if (cmd =="3")
-    //    {
-    //      Move_Motor_abs_all_sync(Pos_3_Record.X_Pos, Pos_3_Record.Y_Pos, Pos_3_Record.Z_Pos);
-    //    }
-    //    else if (cmd =="4")
-    //    {
-    //      Move_Motor_abs_all_sync(Pos_4_Record.X_Pos, Pos_4_Record.Y_Pos, Pos_4_Record.Z_Pos);
-    //    }
-    //  }
-
-    // Set PD average points
+    // Set Heater
     else if (Contains(cmd, "Heater::"))
     {
       cmd.remove(0, 8);
@@ -5778,7 +6047,7 @@ int Function_Excecutation(String cmd, int cmd_No)
         break;
 
       case 28: /* Get All eeprom value */
-        for (int i = 0; i < 1000; i = i + 8)
+        for (int i = 0; i < 700; i = i + 8)
         {
           // if (i == 88)
           // {
@@ -5833,9 +6102,15 @@ int Function_Excecutation(String cmd, int cmd_No)
             if (Motor_Feed_Mode_StopJudge())
               break;
           }
+
+          if (isStop)
+            break;
         }
+
         DataOutput();
+
         cmd_No = 0;
+
         break;
 
       case 103:
@@ -5863,9 +6138,14 @@ int Function_Excecutation(String cmd, int cmd_No)
             if (Motor_Feed_Mode_StopJudge())
               break;
           }
+
+          if (isStop)
+            break;
         }
         DataOutput();
+
         cmd_No = 0;
+
         break;
 
         // X feed - cont
@@ -5894,8 +6174,12 @@ int Function_Excecutation(String cmd, int cmd_No)
             if (Motor_Feed_Mode_StopJudge())
               break;
           }
+
+          if (isStop)
+            break;
         }
         DataOutput();
+
         cmd_No = 0;
         break;
         // X+ - cont
@@ -5924,8 +6208,12 @@ int Function_Excecutation(String cmd, int cmd_No)
             if (Motor_Feed_Mode_StopJudge())
               break;
           }
+
+          if (isStop)
+            break;
         }
         DataOutput();
+
         cmd_No = 0;
         break;
 
@@ -5956,8 +6244,12 @@ int Function_Excecutation(String cmd, int cmd_No)
             if (Motor_Feed_Mode_StopJudge())
               break;
           }
+
+          if (isStop)
+            break;
         }
         DataOutput();
+
         cmd_No = 0;
         break;
 
@@ -5988,8 +6280,12 @@ int Function_Excecutation(String cmd, int cmd_No)
             if (Motor_Feed_Mode_StopJudge())
               break;
           }
+
+          if (isStop)
+            break;
         }
         DataOutput();
+
         cmd_No = 0;
         break;
 
@@ -6049,6 +6345,48 @@ int Function_Excecutation(String cmd, int cmd_No)
       // Go Home
       case 130:
         Move_Motor_abs_all(0, 0, 0);
+        break;
+
+      // Circle Test
+      case 199:
+
+        MSGOutput("Spiral Start");
+
+        long R = 40;
+
+        struct_Motor_Pos OriginalPos;
+        OriginalPos.X = Pos_Now.X;
+        OriginalPos.Y = Pos_Now.Y;
+        OriginalPos.Z = Pos_Now.Z;
+
+        // Initial Pos
+        Move_Motor(X_DIR_Pin, X_STP_Pin, true, R, 20, 100);
+
+        for (size_t i = 1; i <= 1440; i++)
+        {
+          R += 80;
+          long Targ_X = R * (cos(i * (PI / 180.0)) + OriginalPos.X);
+          long Targ_Y = R * (sin(i * (PI / 180.0)) + OriginalPos.Y);
+
+          Move_Motor_abs_all(Targ_X, Targ_Y, 0, 10);
+
+          if (i % 90 == 0)
+            MSGOutput("Ang:" + String(i) + ", Pos:" + String(Targ_X) + "," + String(Targ_Y));
+
+          // delay(12);
+
+          if (isStop)
+            break;
+        }
+
+        // Back to ori
+        Move_Motor_abs_all(0, 0, 0);
+        DataOutput();
+
+        MSGOutput("Spiral End");
+
+        return 0;
+
         break;
       }
 
@@ -6121,13 +6459,13 @@ void CMDOutput(String cmd, bool isSentServer)
 void DataOutput()
 {
   double IL = Cal_PD_Input_IL(Get_PD_Points);
-  Serial.println("Position:" + String(X_Pos_Now) + "," + String(Y_Pos_Now) + "," + String(Z_Pos_Now) + "," + String(IL));
+  Serial.println("Position:" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + "," + String(IL));
 }
 
 // Output now XYZ position and IL
 void DataOutput(double IL)
 {
-  Serial.println("Position:" + String(X_Pos_Now) + "," + String(Y_Pos_Now) + "," + String(Z_Pos_Now) + "," + String(IL));
+  Serial.println("Position:" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + "," + String(IL));
 }
 
 // Output now XYZ position (IL))
@@ -6136,10 +6474,10 @@ void DataOutput(bool isIL)
   if (isIL)
   {
     double IL = Cal_PD_Input_IL(Get_PD_Points);
-    MSGOutput("Position:" + String(X_Pos_Now) + "," + String(Y_Pos_Now) + "," + String(Z_Pos_Now) + "," + String(IL));
+    MSGOutput("Position:" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + "," + String(IL));
   }
   else
-    MSGOutput("Position:" + String(X_Pos_Now) + "," + String(Y_Pos_Now) + "," + String(Z_Pos_Now));
+    MSGOutput("Position:" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z));
 }
 
 // Output now one axis position and IL
@@ -6148,15 +6486,15 @@ void DataOutput(int xyz, double pdValue)
   switch (xyz)
   {
   case 0:
-    CMDOutput(">:" + String(X_Pos_Now) + "," + String(pdValue));
+    CMDOutput(">:" + String(Pos_Now.X) + "," + String(pdValue));
     break;
 
   case 1:
-    CMDOutput(">:" + String(Y_Pos_Now) + "," + String(pdValue));
+    CMDOutput(">:" + String(Pos_Now.Y) + "," + String(pdValue));
     break;
 
   case 2:
-    CMDOutput(">:" + String(Z_Pos_Now) + "," + String(pdValue));
+    CMDOutput(">:" + String(Pos_Now.Z) + "," + String(pdValue));
     break;
   }
 }
@@ -6166,15 +6504,15 @@ long Get_Position(int xyz)
   switch (xyz)
   {
   case 0:
-    return X_Pos_Now;
+    return Pos_Now.X;
     break;
 
   case 1:
-    return Y_Pos_Now;
+    return Pos_Now.Y;
     break;
 
   case 2:
-    return Z_Pos_Now;
+    return Pos_Now.Z;
     break;
   }
 }
