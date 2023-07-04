@@ -16,6 +16,9 @@ bool isCheckingServer = false;
 String ID = "003";
 String Station_ID = "A00";
 
+/// @brief 0 is CTF, 1 is VOA-Heater, 2 is VOA-No Heater, 3 is 3D Switch
+byte Station_Type = 0;
+
 const byte X_STP_Pin = 15; // x軸 步進控制Pulse
 const byte X_DIR_Pin = 2;  // X軸 步進馬達方向控制
 const byte Y_STP_Pin = 5;  // y軸 步進控制Pulse (Pin 0 is for boot) 0 => 5
@@ -54,7 +57,7 @@ long MinMotroStep = 20;
 int M_Level = 10;
 
 /// @brief 1: button,  2: cmd, 3:controller btn
-byte Motor_Continous_Mode = 1;
+byte Motor_Continous_Mode = 2;
 
 typedef struct struct_Motor_Pos
 {
@@ -64,7 +67,6 @@ typedef struct struct_Motor_Pos
 } struct_Motor_Pos;
 
 struct_Motor_Pos Pos_Now;
-// struct_Motor_Pos TargetPos;
 
 int xyz = 0;
 long X_Pos_Record = 0;
@@ -86,6 +88,15 @@ int Z_ScanSTP = 200;
 int X_ScanStable = 25;
 int Y_ScanStable = 50;
 int Z_ScanStable = 80;
+
+typedef struct struct_AlignResult
+{
+  bool IsResultGood = true;
+  double Result_IL = -50;
+  struct_Motor_Pos Result_Pos = {};
+} struct_AlignResult;
+
+struct_AlignResult AlignResult;
 
 // Intention _ Region _ MotionType _ ParaType _ Axis _ Rank = Value
 int AA_SpiralRough_Feed_Steps_Z_A = 25000;
@@ -137,9 +148,6 @@ int AQ_StopAlign_TimeSpan = 840;
 double FS_GradientTarget_X = 0.003;
 double FS_GradientTarget_Y = 0.002;
 double FS_GradientTarget_Z = 0.003;
-
-/// @brief 0 is CTF, 1 is VOA-Heater, 2 is VOA-No Heater, 3 is 3D Switch
-byte Station_Type = 2;
 
 uint16_t FS_Count_X = 7;
 uint16_t FS_Steps_X = 25;
@@ -1970,7 +1978,7 @@ void AutoAlign()
   Threshold = 124;
   stableDelay = 10; // Default 25
   int scanPoints = 8;
-  int stopValue = -3; // Default : -2.9
+  int stopValue = -3; // Default : -3
   int delta_X, delta_Y, X_pos_before, Y_pos_before;
   double PDValue_After_Scan = -60;
 
@@ -2014,8 +2022,6 @@ void AutoAlign()
           if (isStop)
             return;
 
-          // CMDOutput("~:Z Feed,Trip_"+ String(r+1));
-
           PD_Z_before = Cal_PD_Input_IL(Get_PD_Points);
           MSGOutput("PD_Z_before:" + String(PD_Z_before));
 
@@ -2048,7 +2054,6 @@ void AutoAlign()
           }
 
           MSGOutput("motorStep: " + String(motorStep));
-          // MSGOutput("MotorStepRatio:" + String(MotorStepRatio));
           MSGOutput("Z_feed:" + String(motorStep * MotorStepRatio));
 
           PD_Now = Cal_PD_Input_IL(Get_PD_Points);
@@ -2058,7 +2063,10 @@ void AutoAlign()
           DataSent_Server("PD Power:" + String(PD_Now));
 
           if (PD_Now > stopValue)
+          {
             MSGOutput("Over_Stop_Value");
+            break;
+          }
 
           if (PD_Now <= PD_Z_before || (PD_Z_before - PD_Now) > 30 || (abs(PD_Z_before - PD_Now) <= 0.5 && PD_Now > -10))
           {
@@ -2157,7 +2165,7 @@ void AutoAlign()
         break;
 
       // Scan(Rough) : XY Scan
-      if (true)
+      if (PD_Now < stopValue)
       {
         delayBetweenStep = 80;
         MinMotroStep = 350;                        // 800
@@ -2166,6 +2174,8 @@ void AutoAlign()
         CheckStop();
         if (isStop)
           return;
+
+        struct_AlignResult alignRst;
 
         Region = "Scan(Rough)(3)";
 
@@ -2179,10 +2189,21 @@ void AutoAlign()
         else
           MinMotroStep = AA_ScanRough_Scan_Steps_Y_D; // default:70
 
+        if (PD_After > -5)
+        {
+          stableDelay = 50;
+        }
+
         CMDOutput("AS");
         MSGOutput("Gap:" + String(MinMotroStep * MotorStepRatio));
-        PD_After = AutoAlign_Scan_DirectionJudge_V2(Y_Dir, 20, Threshold, MinMotroStep * MotorStepRatio, stableDelay * MotorStepDelayRatio, MotorCC_Y, delayBetweenStep, Get_PD_Points, Target_IL, msg);
+        alignRst = AutoAlign_Scan_DirectionJudge_V2(Y_Dir, 20, Threshold, MinMotroStep * MotorStepRatio,
+                                                    stableDelay * MotorStepDelayRatio, MotorCC_Y, delayBetweenStep, Get_PD_Points, Target_IL, msg);
         CMDOutput("%:");
+
+        // if (!alignRst.IsResultGood)
+        //   return; // For Test
+
+        PD_After = alignRst.Result_IL;
 
         msg = Region + ",X_Scan" + ",Trip_";
         if (PD_After > -9)
@@ -2196,9 +2217,20 @@ void AutoAlign()
         else
           MinMotroStep = AA_ScanRough_Scan_Steps_X_E; // default:120
 
+        if (PD_After > -5)
+        {
+          stableDelay = 50;
+        }
+
         CMDOutput("AS");
         MSGOutput("Gap:" + String(MinMotroStep * MotorStepRatio));
-        PD_After = AutoAlign_Scan_DirectionJudge_V2(X_Dir, 20, Threshold, MinMotroStep * MotorStepRatio, stableDelay * MotorStepDelayRatio, MotorCC_X, delayBetweenStep, Get_PD_Points, Target_IL, msg);
+        alignRst = AutoAlign_Scan_DirectionJudge_V2(X_Dir, 20, Threshold, MinMotroStep * MotorStepRatio,
+                                                    stableDelay * MotorStepDelayRatio, MotorCC_X, delayBetweenStep, Get_PD_Points, Target_IL, msg);
+
+        // if (!alignRst.IsResultGood)
+        //   return; // For Test
+
+        PD_After = alignRst.Result_IL;
 
         MSGOutput("X:" + String(Get_Position(0)));
         MSGOutput("Y:" + String(Get_Position(1)));
@@ -2206,17 +2238,27 @@ void AutoAlign()
 
         CMDOutput("%:");
       }
+      else
+      {
+        MSGOutput("Over_Stop_Value");
+        break;
+      }
 
       PD_After = Cal_PD_Input_IL(Get_PD_Points);
 
       DataOutput(PD_After);
 
       // Scan(Rough) : stop condition
-      if (true)
       {
-        if (PD_After > -2) // default:-2
+        // if (PD_After > -2) // default:-2
+        // {
+        //   MSGOutput("Scan(Rough)(A)-IL>-2:" + String(PD_After) + "," + String(PDValue_After_Scan));
+        //   break;
+        // }
+
+        if (PD_After > stopValue)
         {
-          MSGOutput("Scan(Rough)(A)-IL>-2:" + String(PD_After) + "," + String(PDValue_After_Scan));
+          Serial.println("Better_than_stopValue:" + String(PD_After) + ",stopvalue:" + String(stopValue));
           break;
         }
 
@@ -2235,7 +2277,7 @@ void AutoAlign()
 
         if (PD_After < -42) // default:16
         {
-          MSGOutput("Scan(Rough)(C)-Pass_best_Z_position");
+          MSGOutput("Scan(Rough)(C)-High_loss");
           Serial.println(String(PD_After) + "," + String(PDValue_After_Scan));
           break;
         }
@@ -2263,17 +2305,11 @@ void AutoAlign()
           Serial.println("------- Delta_X:" + String(delta_X) + ",Delta_Y:" + String(delta_Y));
         }
 
-        if (PD_After > stopValue)
-        {
-          Serial.println("Better_than_stopValue:" + String(PD_After) + ",stopvalue:" + String(stopValue));
-          break;
-        }
-
-        if (PD_After < -54)
-        {
-          Serial.println("Rough_Scan:High_loss");
-          return;
-        }
+        // if (PD_After < -54)
+        // {
+        //   Serial.println("Rough_Scan:High_loss");
+        //   return;
+        // }
       }
     }
   }
@@ -3179,63 +3215,6 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
       PD_Best = IL_Best_Trip2;
 
       BestPos = Pos_Best_Trip2;
-
-      // Move_Motor_abs(XYZ, Pos_Ini_Trip2); //Jump to Trip_2 start position
-
-      // if(backlash > 0)
-      // {
-      //   MSGOutput("Jump Backlash : " + String(backlash));
-      //   step(STP_Pin, backlash, delayBetweenStep);
-      //   delay(150);
-      // }
-
-      // deltaPos = abs(Pos_Best_Trip2 - Get_Position(XYZ));
-
-      // if (deltaPos < backlash)
-      // {
-      //   MSGOutput("Jump Backlesh 2:" + String((backlash - deltaPos)));
-      //   step(STP_Pin, (backlash - deltaPos), delayBetweenStep);
-      //   delay(stableDelay + 300);
-
-      //   deltaPos = abs(Pos_Best_Trip2 - Get_Position(XYZ));
-      // }
-
-      // delay(300);
-
-      // PD_Now = Cal_PD_Input_IL(Get_PD_Points);
-      // DataOutput(PD_Now);
-      // DataOutput(XYZ, PD_Now); //int xyz, double pdValue
-
-      // MotorCC = !MotorCC; //Reverse direction
-      // digitalWrite(DIR_Pin, MotorCC);
-      // delay(5);
-    }
-
-    // Best IL in Trip 1
-    else if (Trips == 1)
-    {
-      MotorCC = !MotorCC; // Reverse direction
-      digitalWrite(DIR_Pin, MotorCC);
-      delay(15);
-
-      MSGOutput("Jump to Trip Initial Pos : " + String(Pos_Ini_Trip1));
-      Move_Motor_abs(XYZ, Pos_Ini_Trip1); // Jump to Trip_1 start position
-
-      MSGOutput("Jump Backlash : " + String(backlash));
-      step(STP_Pin, backlash, delayBetweenStep);
-
-      delay(300); // 100
-
-      PD_Now = Cal_PD_Input_IL(Get_PD_Points);
-      DataOutput(PD_Now);
-      DataOutput(XYZ, PD_Now); // int xyz, double pdValue
-
-      MotorCC = !MotorCC; // Reverse direction
-      digitalWrite(DIR_Pin, MotorCC);
-      delay(5);
-
-      deltaPos = abs(Pos_Best_Trip1 - Get_Position(XYZ));
-      MSGOutput("deltaPos : " + String(deltaPos));
     }
 
     else //------------Best in Trip_1----------------
@@ -3252,39 +3231,43 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
           return false;
       }
 
+      // Best IL in Trip 1 and Trip setting is 1
+      if (Trips == 1)
+      {
+        // MotorCC = !MotorCC; // Reverse direction
+        // digitalWrite(DIR_Pin, MotorCC);
+        // delay(15);
+
+        MSGOutput("Jump to Trip Initial Pos : " + String(Pos_Ini_Trip1));
+        Move_Motor_abs(XYZ, Pos_Ini_Trip1); // Jump to Trip_1 start position
+
+        // MSGOutput("Jump Backlash : " + String(backlash));
+        // step(STP_Pin, backlash, delayBetweenStep);
+
+        delay(300); // 100
+
+        PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+        DataOutput(PD_Now);
+        DataOutput(XYZ, PD_Now); // int xyz, double pdValue
+
+        // MotorCC = !MotorCC; // Reverse direction
+        // digitalWrite(DIR_Pin, MotorCC);
+        // delay(5);
+
+        // deltaPos = abs(Pos_Best_Trip1 - Get_Position(XYZ));
+        // MSGOutput("deltaPos : " + String(deltaPos));
+
+        // MSGOutput("Best in Trip_1 : " + String(Pos_Best_Trip1));
+
+        // BestPos = Pos_Best_Trip1;
+      }
+
       if (XYZ == 2)
         Pos_Best_Trip1 = Pos_Best_Trip1 - (AQ_Scan_Compensation_Steps_Z_A * MotorStepRatio);
 
       MSGOutput("Best in Trip_1 (Compensation) : " + String(Pos_Best_Trip1));
 
       BestPos = Pos_Best_Trip1;
-
-      // Move_Motor_abs(XYZ, PD_Best); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
-
-      // delay(200);
-      // PD_Now = Cal_PD_Input_IL(Get_PD_Points);
-      // DataOutput(PD_Now);
-      // DataOutput(XYZ, PD_Now); //int xyz, double pdValue
-      // MSGOutput("Jump to trip 1 best");
-
-      // PD_Best = IL_Best_Trip1;
-      // deltaPos = abs(Pos_Best_Trip1 - Get_Position(XYZ));
-
-      // if (deltaPos < motorStep * 2)
-      // {
-      //   MSGOutput("Jump Backlesh 1");
-
-      //   step(STP_Pin, (backlash), delayBetweenStep+20);
-      //   delay(stableDelay + 200);
-
-      //   deltaPos = abs(Pos_Best_Trip2 - Get_Position(XYZ)); //Two curves are totally different, then back to best pos in trip 2
-      // }
-
-      // if (isStop) return true;
-
-      // MotorCC = !MotorCC; //Reverse direction
-      // digitalWrite(DIR_Pin, MotorCC);
-      // delay(2);
     }
 
     // MSGOutput("Delta Pos : " + String(deltaPos));
@@ -3355,7 +3338,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
     {
       // Move_Motor(DIR_Pin, STP_Pin, MotorCC, deltaPos, delayBetweenStep, 100); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
       Move_Motor_abs(XYZ, BestPos); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
-      delay(200);
+      delay(300);
       PD_Now = Cal_PD_Input_IL(Get_PD_Points);
       DataOutput(PD_Now);
       DataOutput(XYZ, PD_Now); // int xyz, double pdValue
@@ -3575,8 +3558,10 @@ long Curfit_2(double x1[], double y1[], int dataCount)
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-double AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int Threshold, int motorStep, int stableDelay,
-                                        bool Direction, int delayBetweenStep, int Get_PD_Points, int StopPDValue, String msg)
+struct_AlignResult AlignResult_V2;
+
+struct_AlignResult AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int Threshold, int motorStep, int stableDelay,
+                                                    bool Direction, int delayBetweenStep, int Get_PD_Points, int StopPDValue, String msg)
 {
   int DIR_Pin = 0;
   int STP_Pin = 0;
@@ -3637,7 +3622,11 @@ double AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int Threshold, i
 
     PD_Best = PD_initial;
 
-    return PD_Best;
+    AlignResult_V2.Result_IL = PD_Best;
+    AlignResult_V2.IsResultGood = true;
+    AlignResult_V2.Result_Pos = Pos_Now;
+
+    return AlignResult_V2;
   }
 
   Move_Motor(DIR_Pin, STP_Pin, MotorCC, motorStep * 4, delayBetweenStep, 100, true);
@@ -3655,7 +3644,11 @@ double AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int Threshold, i
 
     PD_Best = PD_Now;
 
-    return PD_Best;
+    AlignResult_V2.Result_IL = PD_Best;
+    AlignResult_V2.IsResultGood = true;
+    AlignResult_V2.Result_Pos = Pos_Now;
+
+    return AlignResult_V2;
   }
 
   PD_Best_Pos = 0;
@@ -3701,7 +3694,12 @@ double AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int Threshold, i
     for (int i = 0; i < count; i++)
     {
       if (isStop)
-        return true;
+      {
+        AlignResult_V2.Result_IL = PD_Now;
+        AlignResult_V2.IsResultGood = true;
+        AlignResult_V2.Result_Pos = Pos_Now;
+        return AlignResult_V2;
+      }
 
       if (i != 0)
       {
@@ -3729,13 +3727,23 @@ double AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int Threshold, i
         Serial.println("");
 
         PD_Best = PD_Value[i];
-        return PD_Best;
+
+        AlignResult_V2.Result_IL = PD_Value[i];
+        AlignResult_V2.IsResultGood = true;
+        AlignResult_V2.Result_Pos = Pos_Now;
+        return AlignResult_V2;
       }
 
       if (PD_Value[i] > PD_Best)
       {
         PD_Best = PD_Value[i];
         PD_Best_Pos = i;
+
+        if (PD_Best > -5 && stableDelay < 50)
+        {
+          stableDelay = 50;
+          Serial.println("stableDelay: " + String(stableDelay));
+        }
       }
 
       if (PD_Value[i] > PD_Trip2_Best)
@@ -3798,61 +3806,78 @@ double AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int Threshold, i
   trip++;
   CMDOutput("~:" + msg + String(trip)); // Trip_3------------------------------------------------------------
 
-  if (isTrip3Jump)
+  // Jump to best position
+  if (true)
   {
+    delay(120);
     Move_Motor_abs(axisDir, PD_Best_Pos_Trip2); // Jump to Trip_2 start position
-    delay(150);
-    DataOutput(axisDir, Cal_PD_Input_IL(Get_PD_Points)); // int xyz, double pdValue
+    delay(350);
+    PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+    DataOutput(axisDir, PD_Now); // int xyz, double pdValue
     MSGOutput("Jump to best position");
   }
-  else if (PD_Now < PD_Best - 0.5)
+  // else if (PD_Now < PD_Best - 0.5)
+  // {
+  //   if (PD_Best <= 3)
+  //   {
+  //     Move_Motor_abs(axisDir, Pos_Ini_Trip2); // Jump to Trip_2 start position
+  //     delay(180);
+  //     DataOutput(axisDir, Cal_PD_Input_IL(Get_PD_Points)); // int xyz, double pdValue
+  //   }
+
+  //   long pNow = PD_Best_Pos_Trip2;
+  //   if (xyz == 0)
+  //     pNow = Pos_Now.X;
+  //   else if (xyz == 1)
+  //     pNow = Pos_Now.Y;
+  //   else if (xyz == 2)
+  //     pNow = Pos_Now.Z;
+
+  //   if (PD_Best_Pos_Trip2 != pNow)
+  //   {
+  //     Move_Motor_abs(axisDir, PD_Best_Pos_Trip2); // Jump to Trip_2 start position
+  //     delay(180);
+  //     DataOutput(axisDir, Cal_PD_Input_IL(Get_PD_Points)); // int xyz, double pdValue
+  //     MSGOutput("Back to best position");
+  //   }
+  // }
+
+  // delay(stableDelay);
+
+  // PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+
+  // if (abs(PD_Now - PD_Best) < 0.4)
+  // {
+  //   timer_2 = millis();
+  //   ts = (timer_2 - timer_1) * 0.001;
+  //   CMDOutput("t:" + String(ts, 2));
+
+  //   AlignResult_V2.Result_IL = PD_Now;
+  //   AlignResult_V2.IsResultGood = true;
+  //   AlignResult_V2.Result_Pos = Pos_Now;
+
+  //   return AlignResult_V2;
+  // }
+
+  // timer_2 = millis();
+  // ts = (timer_2 - timer_1) * 0.001;
+  // Serial.print("TS:");
+  // Serial.println(ts, 2);
+  // Serial.println(" ");
+  // CMDOutput("t:" + String(ts, 2));
+
+  AlignResult_V2.Result_IL = PD_Now;
+  AlignResult_V2.IsResultGood = true;
+  AlignResult_V2.Result_Pos = Pos_Now;
+
+  if (PD_Best > -5 && PD_Now < PD_Best - 1)
   {
-    if (PD_Best <= 3)
-    {
-      Move_Motor_abs(axisDir, Pos_Ini_Trip2); // Jump to Trip_2 start position
-      delay(180);
-      DataOutput(axisDir, Cal_PD_Input_IL(Get_PD_Points)); // int xyz, double pdValue
-    }
-
-    long pNow = PD_Best_Pos_Trip2;
-    if (xyz == 0)
-      pNow = Pos_Now.X;
-    else if (xyz == 1)
-      pNow = Pos_Now.Y;
-    else if (xyz == 2)
-      pNow = Pos_Now.Z;
-
-    if (PD_Best_Pos_Trip2 != pNow)
-    {
-      Move_Motor_abs(axisDir, PD_Best_Pos_Trip2); // Jump to Trip_2 start position
-      delay(180);
-      DataOutput(axisDir, Cal_PD_Input_IL(Get_PD_Points)); // int xyz, double pdValue
-      MSGOutput("Back to best position");
-    }
+    AlignResult_V2.IsResultGood = false;
   }
 
-  delay(stableDelay);
+  return AlignResult_V2;
 
-  PD_Now = Cal_PD_Input_IL(Get_PD_Points);
-
-  if (abs(PD_Now - PD_Best) < 0.4)
-  {
-    timer_2 = millis();
-    ts = (timer_2 - timer_1) * 0.001;
-    CMDOutput("t:" + String(ts, 2));
-
-    return PD_Best;
-  }
-
-  return PD_Best;
-
-  timer_2 = millis();
-  ts = (timer_2 - timer_1) * 0.001;
-  Serial.print("TS:");
-  Serial.println(ts, 2);
-  Serial.println(" ");
-
-  return PD_Best;
+  // return PD_Best;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
