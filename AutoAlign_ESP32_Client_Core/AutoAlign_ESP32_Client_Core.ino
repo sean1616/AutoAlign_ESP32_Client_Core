@@ -93,6 +93,7 @@ typedef struct struct_AlignResult
 {
   bool IsResultGood = true;
   double Result_IL = -50;
+  double Best_IL = -50;
   struct_Motor_Pos Result_Pos = {};
 } struct_AlignResult;
 
@@ -142,8 +143,8 @@ int AQ_Scan_Steps_Z_D = 100;
 int AA_ScanFinal_Scan_Delay_X_A = 100;
 int AA_ScanFinal_Scan_Delay_Y_A = 60;
 
-int AQ_Total_TimeSpan = 840;
-int AQ_StopAlign_TimeSpan = 840;
+int AQ_Total_TimeSpan = 2000;
+int AQ_StopAlign_TimeSpan = 860;
 
 double FS_GradientTarget_X = 0.003;
 double FS_GradientTarget_Y = 0.002;
@@ -283,6 +284,7 @@ double Motor_Unit_Idx = 0.01953125; // 5 phase motor min step 4nm per step
 
 int Get_PD_Points = 1;
 double Target_IL = 0;
+double Target_IL_Rough = -3; // Stop IL value for Rought scan: default:-3 (CTF)
 double StopValue = 0;
 int cmd_No = 0;
 
@@ -659,7 +661,7 @@ void EmergencyStop()
 
 // 0xC4, 0xDE, 0xE2, 0xC0, 0xA9, 0x60  A10 controller
 
-uint8_t ControllerAddress[] = {0xC4, 0xDE, 0xE2, 0xC0, 0xA9, 0x60}; // Controller addr
+uint8_t ControllerAddress[] = {0x90, 0x38, 0x0C, 0xED, 0x6D, 0xEC}; // Controller addr
 uint8_t ServerAddress[] = {0x8C, 0x4B, 0x14, 0x16, 0x35, 0x88};     // Server Mac address  #1:0x8C, 0x4B, 0x14, 0x16, 0x37, 0xF8   #2:0x8C, 0x4B, 0x14, 0x16, 0x35, 0x88
 uint8_t ThisAddress[6];                                             // Server Mac address  #1:0x8C, 0x4B, 0x14, 0x16, 0x37, 0xF8   #2:0x8C, 0x4B, 0x14, 0x16, 0x35, 0x88
 String ThisAddr = "";
@@ -1618,11 +1620,12 @@ void Move_Motor_abs_all(int x, int y, int z, bool IsMsg, int DelayT = 10)
 
 void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep, int stableDelay)
 {
-  MotorCC = dirt;
-  digitalWrite(dir_pin, dirt);
-  delay(3);
   if (moveSteps > 0)
   {
+    MotorCC = dirt;
+    digitalWrite(dir_pin, dirt);
+    delay(3);
+
     step(stp_pin, moveSteps, delayStep);
     delay(stableDelay);
     DataOutput(false);
@@ -1631,11 +1634,12 @@ void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delay
 
 void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep, int stableDelay, bool isOutputPosition)
 {
-  MotorCC = dirt;
-  digitalWrite(dir_pin, dirt);
-  delay(3);
   if (moveSteps > 0)
   {
+    MotorCC = dirt;
+    digitalWrite(dir_pin, dirt);
+    delay(3);
+
     step(stp_pin, moveSteps, delayStep);
     delay(stableDelay);
 
@@ -1695,7 +1699,7 @@ bool Fine_Scan(int axis, bool Trip2Stop)
       MotorCC_X = digitalRead(X_DIR_Pin);
 
       CMDOutput("AS");
-      K_OK = Scan_AllRange_TwoWay(0, FS_Count_X, FS_Steps_X * MotorStepRatio, FS_Stable_X, MotorCC_X, FS_DelaySteps_X, 0, FS_Avg_X, FS_Trips_X, "X Fine-Scan,Trip_");
+      K_OK = Scan_AllRange_TwoWay(0, FS_Count_X, FS_Steps_X * MotorStepRatio, FS_Stable_X, MotorCC_X, FS_DelaySteps_X, StopValue, FS_Avg_X, FS_Trips_X, "X Fine-Scan,Trip_");
       CMDOutput("%:");
 
       if (!K_OK)
@@ -1927,7 +1931,7 @@ void AutoAlign()
   MSGOutput(String(PD_LV1));
   MSGOutput(String(isStop));
 
-  // Spiral Fine Scan
+  // ---------------------------------------------------Spiral Fine Scan-------------------------------------------------
   if (PD_LV1 < -40) // default: 300
   {
     Region = "Sprial(Fine)";
@@ -1978,11 +1982,11 @@ void AutoAlign()
   Threshold = 124;
   stableDelay = 10; // Default 25
   int scanPoints = 8;
-  int stopValue = -3; // Default : -3
+  // int Target_IL_Rough = -3; // Default : -3
   int delta_X, delta_Y, X_pos_before, Y_pos_before;
   double PDValue_After_Scan = -60;
 
-  // Rough-Scan
+  // -------------------------------------------------Rough-Scan-----------------------------------------------------
   if (PD_Now < -4 && true)
   {
     MSGOutput("Scan(Rough)");
@@ -2001,7 +2005,7 @@ void AutoAlign()
 
         PD_Before = Cal_PD_Input_IL(Get_PD_Points);
 
-        if (PD_Before > stopValue)
+        if (PD_Before > Target_IL_Rough)
           break;
 
         stableDelay = 100;
@@ -2009,6 +2013,8 @@ void AutoAlign()
 
         CMDOutput("AS");
         CMDOutput(">>Z Feed,Trip_1");
+
+        CMDOutput("StopValue: " + String(Target_IL_Rough));
 
         PD_Now = Cal_PD_Input_IL(Get_PD_Points);
 
@@ -2062,7 +2068,7 @@ void AutoAlign()
           DataOutput(2, PD_Now); // int xyz, double pdValue
           DataSent_Server("PD Power:" + String(PD_Now));
 
-          if (PD_Now > stopValue)
+          if (PD_Now > Target_IL_Rough)
           {
             MSGOutput("Over_Stop_Value");
             break;
@@ -2147,11 +2153,11 @@ void AutoAlign()
           // bool Direction, int delayBetweenStep, int Get_PD_Points, int StopPDValue, String msg)
 
           msg = Region + ",Y_Scan" + ",Trip_";
-          AutoAlign_Scan_DirectionJudge_V2(Y_Dir, 15, Threshold, 80 * MotorStepRatio, stableDelay * MotorStepDelayRatio, MotorCC_Y, delayBetweenStep, Get_PD_Points, stopValue, msg);
+          AutoAlign_Scan_DirectionJudge_V2(Y_Dir, 15, Threshold, 80 * MotorStepRatio, stableDelay * MotorStepDelayRatio, MotorCC_Y, delayBetweenStep, Get_PD_Points, Target_IL_Rough, msg);
           CMDOutput("%:");
 
           msg = Region + ",X_Scan" + ",Trip_";
-          AutoAlign_Scan_DirectionJudge_V2(X_Dir, 13, Threshold, 100 * MotorStepRatio, stableDelay * MotorStepDelayRatio, MotorCC_X, delayBetweenStep, Get_PD_Points, stopValue, msg);
+          AutoAlign_Scan_DirectionJudge_V2(X_Dir, 13, Threshold, 100 * MotorStepRatio, stableDelay * MotorStepDelayRatio, MotorCC_X, delayBetweenStep, Get_PD_Points, Target_IL_Rough, msg);
           CMDOutput("%:");
 
           a = Cal_PD_Input_IL(Get_PD_Points);
@@ -2161,14 +2167,17 @@ void AutoAlign()
       }
 
       PD_After = Cal_PD_Input_IL(Get_PD_Points);
-      if (PD_After > stopValue)
-        break;
-
-      // Scan(Rough) : XY Scan
-      if (PD_Now < stopValue)
+      if (PD_After > Target_IL_Rough)
       {
-        delayBetweenStep = 80;
-        MinMotroStep = 350;                        // 800
+        MSGOutput("Over_Stop_Value");
+        break;
+      }
+
+      // ----------------------------------------- Scan(Rough) : XY Scan ------------------------------------------------
+      if (PD_Now < Target_IL_Rough)
+      {
+        delayBetweenStep = 20; // 80
+        MinMotroStep = 350;
         stableDelay = AA_ScanFinal_Scan_Delay_X_A; // default:0
 
         CheckStop();
@@ -2197,11 +2206,18 @@ void AutoAlign()
         CMDOutput("AS");
         MSGOutput("Gap:" + String(MinMotroStep * MotorStepRatio));
         alignRst = AutoAlign_Scan_DirectionJudge_V2(Y_Dir, 20, Threshold, MinMotroStep * MotorStepRatio,
-                                                    stableDelay * MotorStepDelayRatio, MotorCC_Y, delayBetweenStep, Get_PD_Points, Target_IL, msg);
+                                                    stableDelay * MotorStepDelayRatio,
+                                                    MotorCC_Y, delayBetweenStep, Get_PD_Points, Target_IL_Rough, msg);
         CMDOutput("%:");
 
         // if (!alignRst.IsResultGood)
         //   return; // For Test
+
+        if (alignRst.Best_IL > Target_IL_Rough)
+        {
+          Serial.println("Better_than_stopValue:" + String(PD_After) + ",stopvalue:" + String(Target_IL_Rough));
+          break;
+        }
 
         PD_After = alignRst.Result_IL;
 
@@ -2225,7 +2241,8 @@ void AutoAlign()
         CMDOutput("AS");
         MSGOutput("Gap:" + String(MinMotroStep * MotorStepRatio));
         alignRst = AutoAlign_Scan_DirectionJudge_V2(X_Dir, 20, Threshold, MinMotroStep * MotorStepRatio,
-                                                    stableDelay * MotorStepDelayRatio, MotorCC_X, delayBetweenStep, Get_PD_Points, Target_IL, msg);
+                                                    stableDelay * MotorStepDelayRatio, MotorCC_X,
+                                                    delayBetweenStep, Get_PD_Points, Target_IL_Rough, msg);
 
         // if (!alignRst.IsResultGood)
         //   return; // For Test
@@ -2256,9 +2273,9 @@ void AutoAlign()
         //   break;
         // }
 
-        if (PD_After > stopValue)
+        if (PD_After > Target_IL_Rough)
         {
-          Serial.println("Better_than_stopValue:" + String(PD_After) + ",stopvalue:" + String(stopValue));
+          Serial.println("Better_than_stopValue:" + String(PD_After) + ",stopvalue:" + String(Target_IL_Rough));
           break;
         }
 
@@ -3059,10 +3076,9 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
   long Pos_Best_Trip2 = 0;
   long Pos_Ini_Trip2 = 0;
 
-  //------------------------------------Trip_2 ------------------------------------------------------------
+  //------------------------------------------------------Trip_2 ------------------------------------------------------------
   MSGOutput(" --- Trip 2 --- ");
-  MSGOutput("trip: " + String(trip));
-  MSGOutput("Trips: " + String(Trips));
+  MSGOutput("Trip Now: " + String(trip) + ", Trips Setting: " + String(Trips));
 
   GradientCount = 0;
 
@@ -3225,6 +3241,11 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
       if (Pos_Best_Trip1 == Get_Position(XYZ))
       {
         PD_Now = Cal_PD_Input_IL(2 * Get_PD_Points);
+
+        timer_2 = millis();
+        double ts = (timer_2 - timer_1) * 0.001;
+        CMDOutput("t:" + String(ts, 2));
+
         if (abs(PD_Now - IL_Best_Trip1) <= 0.12 || PD_Now > IL_Best_Trip1)
           return true;
         else
@@ -3269,10 +3290,6 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
 
       BestPos = Pos_Best_Trip1;
     }
-
-    // MSGOutput("Delta Pos : " + String(deltaPos));
-
-    // isTrip3Jump = false;
 
     // Move to the best IL position in trip 1 & 2
     if (!isTrip3Jump)
@@ -3575,6 +3592,7 @@ struct_AlignResult AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int 
 
   MSGOutput("Scan V2");
   Serial.println("stableDelay: " + String(stableDelay));
+  Serial.println("StopPDValue: " + String(StopPDValue));
   Serial.println("motorStep: " + String(motorStep));
 
   switch (axisDir)
@@ -3623,15 +3641,16 @@ struct_AlignResult AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int 
     PD_Best = PD_initial;
 
     AlignResult_V2.Result_IL = PD_Best;
+    AlignResult_V2.Best_IL = PD_Best;
     AlignResult_V2.IsResultGood = true;
     AlignResult_V2.Result_Pos = Pos_Now;
 
     return AlignResult_V2;
   }
 
-  Move_Motor(DIR_Pin, STP_Pin, MotorCC, motorStep * 4, delayBetweenStep, 100, true);
+  Move_Motor(DIR_Pin, STP_Pin, MotorCC, motorStep * 4, delayBetweenStep, 200, true);
 
-  PD_Now = Cal_PD_Input_IL(Get_PD_Points * 5);
+  PD_Now = Cal_PD_Input_IL(Get_PD_Points * 2);
   DataOutput(axisDir, PD_Now); // int xyz, double pdValue
 
   Serial.println("Initial: " + String(PD_initial) + ", After:" + String(PD_Now));
@@ -3645,6 +3664,7 @@ struct_AlignResult AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int 
     PD_Best = PD_Now;
 
     AlignResult_V2.Result_IL = PD_Best;
+    AlignResult_V2.Best_IL = PD_Best;
     AlignResult_V2.IsResultGood = true;
     AlignResult_V2.Result_Pos = Pos_Now;
 
@@ -3667,7 +3687,7 @@ struct_AlignResult AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int 
     PD_Best = PD_Now;
     digitalWrite(DIR_Pin, MotorCC);
     delay(10);
-    MSGOutput("Motor_Forward");
+    MSGOutput("Dir: Forward");
 
     PD_Value[0] = Cal_PD_Input_IL(Get_PD_Points);
   }
@@ -3676,7 +3696,7 @@ struct_AlignResult AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int 
     Dir = false;
     PD_Best = PD_initial;
     BackLash_Reverse(axisDir, MotorCC, stableDelay);
-    MSGOutput("Motor_Reverse");
+    MSGOutput("Dir: Reverse");
     isReverse = true;
   }
 
@@ -3696,6 +3716,7 @@ struct_AlignResult AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int 
       if (isStop)
       {
         AlignResult_V2.Result_IL = PD_Now;
+        AlignResult_V2.Best_IL = PD_Best;
         AlignResult_V2.IsResultGood = true;
         AlignResult_V2.Result_Pos = Pos_Now;
         return AlignResult_V2;
@@ -3729,6 +3750,7 @@ struct_AlignResult AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int 
         PD_Best = PD_Value[i];
 
         AlignResult_V2.Result_IL = PD_Value[i];
+        AlignResult_V2.Best_IL = PD_Best;
         AlignResult_V2.IsResultGood = true;
         AlignResult_V2.Result_Pos = Pos_Now;
         return AlignResult_V2;
@@ -3867,6 +3889,7 @@ struct_AlignResult AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int 
   // CMDOutput("t:" + String(ts, 2));
 
   AlignResult_V2.Result_IL = PD_Now;
+  AlignResult_V2.Best_IL = PD_Best;
   AlignResult_V2.IsResultGood = true;
   AlignResult_V2.Result_Pos = Pos_Now;
 
@@ -3890,7 +3913,7 @@ bool AutoAlign_Scan_DirectionJudge_V3(int XYZ, int count, int motorStep, int sta
   int backlash = 40;
   MotorCC = Direction; // initial direction
   int trip = 1;
-  int dataCount = 3;
+  int dataCount = count + 1;
   int dataCount_ori;
   int indexofBestIL = 0;
   double PD_Value[4 * count + 1];
@@ -3901,7 +3924,6 @@ bool AutoAlign_Scan_DirectionJudge_V3(int XYZ, int count, int motorStep, int sta
   unsigned long timer_1 = 0, timer_2 = 0;
   timer_1 = millis();
 
-  dataCount = count + 1;
   dataCount_ori = dataCount;
 
   switch (XYZ)
@@ -4251,11 +4273,13 @@ int Function_Classification(String cmd, int ButtonSelected)
 
       byte dirPin, stpPin;
       bool dirt;
+      int delayNow = delayBetweenStep_Y;
 
       if (Contains(cmd, "X"))
       {
         dirPin = X_DIR_Pin;
         stpPin = X_STP_Pin;
+        delayNow = delayBetweenStep_X;
       }
       else if (Contains(cmd, "Y"))
       {
@@ -4266,6 +4290,7 @@ int Function_Classification(String cmd, int ButtonSelected)
       {
         dirPin = Z_DIR_Pin;
         stpPin = Z_STP_Pin;
+        delayNow = delayBetweenStep_Z;
       }
 
       cmd.remove(0, 1);
@@ -4281,7 +4306,7 @@ int Function_Classification(String cmd, int ButtonSelected)
 
       cmd.remove(0, 2);
 
-      Move_Motor(dirPin, stpPin, dirt, cmd.toDouble(), delayBetweenStep_Y, 0); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
+      Move_Motor(dirPin, stpPin, dirt, cmd.toDouble(), delayNow, 0); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
     }
 
     // Abs
@@ -4503,7 +4528,15 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Set auto-align / auto-curing Parameter
     else if (Contains(cmd, "Set::"))
     {
-      cmd.remove(0, 5);
+      // Serial.print("Row Cmd: ");
+      // Serial.println(cmd);
+
+      int indexOffSet = cmd.indexOf("Set::");
+
+      // Serial.print("Index: ");
+      // Serial.println(String(indexOffSet));
+
+      cmd.remove(0, 5 + indexOffSet);
 
       String ParaName = cmd.substring(0, cmd.indexOf('='));
       cmd.remove(0, cmd.indexOf('=') + 1);
@@ -5529,8 +5562,14 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
           else
           {
-            MSGOutput("StopValue : " + String(StopValue));
-            MSGOutput("Target_IL : " + String((Target_IL - (Acceptable_Delta_IL))));
+            AQ_StopAlign_TimeSpan = 860; // 1 min
+
+            MSGOutput("AutoCuring_Best_IL : " + String(AutoCuring_Best_IL));
+            MSGOutput("Acceptable_Delta_IL : " + String(Acceptable_Delta_IL));
+            MSGOutput("Target_IL : " + String((Target_IL)));
+            // StopValue = (Target_IL - (Acceptable_Delta_IL));
+            StopValue = Target_IL;
+            MSGOutput("Scan Threshold : " + String(Target_IL - Acceptable_Delta_IL));
           }
 
           while (true)
@@ -5652,7 +5691,7 @@ int Function_Excecutation(String cmd, int cmd_No)
               else
               {
                 // IL Stable Time ,  70 secs,  curing time threshold , 12.5 mins
-                if (time_curing_2 - time_curing_1 > 70000 && Q_Time >= 860 && !isStopAlign) // 800
+                if (time_curing_2 - time_curing_1 > 70000 && Q_Time >= AQ_StopAlign_TimeSpan && !isStopAlign) // 800
                 {
                   MSGOutput("Update : IL Stable - Stop Auto Curing");
                   isStopAlign = true;
@@ -5847,7 +5886,9 @@ int Function_Excecutation(String cmd, int cmd_No)
                       delay(5);
 
                       CMDOutput("AS");
-                      K_OK = AutoAlign_Scan_DirectionJudge_V3(Z_Dir, FS_Count_Z, Z_ScanSTP, FS_Stable_Z, false, FS_DelaySteps_Z, 0, FS_Avg_Z, FS_Trips_Z, "Z Fine-Scan,Trip_");
+
+                      // Fix Z scan steps when Auto Q to make sure find best IL
+                      K_OK = AutoAlign_Scan_DirectionJudge_V3(Z_Dir, 6, Z_ScanSTP, FS_Stable_Z, false, FS_DelaySteps_Z, Target_IL, FS_Avg_Z, FS_Trips_Z, "Z Fine-Scan,Trip_");
                       // K_OK = Scan_AllRange_TwoWay(2, FS_Count_Z, Z_ScanSTP, FS_Stable_Z, 0, FS_DelaySteps_Z, StopValue, FS_Avg_Z, FS_Trips_Z, "Z Scan,Trip_");
                       CMDOutput("%:");
 
@@ -5861,7 +5902,7 @@ int Function_Excecutation(String cmd, int cmd_No)
                         DataSent_Controller("Scan");
 
                         CMDOutput("AS");
-                        AutoAlign_Scan_DirectionJudge_V3(Z_Dir, FS_Count_Z, Z_ScanSTP, FS_Stable_Z, false, FS_DelaySteps_Z, 0, FS_Avg_Z, FS_Trips_Z, "Z Fine-Scan,Trip_");
+                        AutoAlign_Scan_DirectionJudge_V3(Z_Dir, 6, Z_ScanSTP, FS_Stable_Z, false, FS_DelaySteps_Z, Target_IL, FS_Avg_Z, FS_Trips_Z, "Z Fine-Scan,Trip_");
                         // Scan_AllRange_TwoWay(2, FS_Count_Z, Z_ScanSTP, FS_Stable_Z, 0, FS_DelaySteps_Z, StopValue, FS_Avg_Z, FS_Trips_Z, "Z Re-Scan,Trip_");
                         CMDOutput("%:");
 
@@ -5884,13 +5925,13 @@ int Function_Excecutation(String cmd, int cmd_No)
                 PD_Now = Cal_PD_Input_IL(Get_PD_Points);
 
                 // IL stable count (CTF Station only)
-                if (abs(PD_Before - PD_Now) < 0.3 && Q_Time > 750 && Station_Type == 0)
+                if (abs(PD_Before - PD_Now) < 0.2 && Q_Time > 780 && Station_Type == 0)
                 {
                   IL_stable_count++;
 
                   if (IL_stable_count > 4 && !isStopAlign && Q_Time > 750)
                   {
-                    MSGOutput("IL stable to break");
+                    MSGOutput("Update : IL stable to break");
                     MSGOutput("Stable Time : " + String(Q_Time));
                     isStopAlign = true;
                   }
