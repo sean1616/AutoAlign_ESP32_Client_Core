@@ -5,7 +5,7 @@
 #include <Wire.h>
 #include <Adafruit_ADS1X15.h>
 
-TaskHandle_t Task_1;
+TaskHandle_t Task_1, Task_2;
 #define WDT_TIMEOUT 3
 
 // String server_ID, server_Password;
@@ -182,6 +182,14 @@ const uint16_t EP_Target_IL = 72;
 const uint16_t EP_AA_ScanFinal_Scan_Delay_X_A = 80;
 // const uint16_t EP_Server_ID = 88;        // 88~119
 // const uint16_t EP_Server_Password = 120; // 120~151
+
+//for 3D
+uint16_t EP_Motor_DIR_X = 88;
+uint16_t EP_Motor_DIR_Y = 96;
+uint16_t EP_Motor_DIR_Z = 104;
+uint16_t EP_Encoder_Motor_Step_X = 112;
+uint16_t EP_Encoder_Motor_Step_Y = 120;
+uint16_t EP_Encoder_Motor_Step_Z = 128;
 
 const uint16_t EP_Get_PD_Points = 152;
 const uint16_t EP_AQ_Scan_Compensation_Steps_Z_A = 160;
@@ -604,6 +612,21 @@ bool Contains(String text, String search)
     return true;
 }
 
+String ExtractCmd(String cmd, const char* header)
+{
+  int indexOffSet = cmd.indexOf(header);
+  int strLength = strlen(header); // 使用 strlen 函式取得字串長度，並賦值給 int 變數
+
+  // Serial.println("indexOffSet:" + String(indexOffSet));
+  // Serial.println("strLength:" + String(strLength));
+
+  cmd.remove(0, strLength + indexOffSet);
+
+  cmd.trim();
+
+  return cmd;
+}
+
 typedef enum
 {
   HomeMade, /**< X direction */
@@ -776,6 +799,7 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
   }
 }
 
+//Connect to Controll panel
 void Task_1_sendData(void *pvParameters)
 {
   while (true)
@@ -793,479 +817,37 @@ void Task_1_sendData(void *pvParameters)
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void setup()
+// void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep, int stableDelay)
+// {
+//   if (moveSteps > 0)
+//   {
+//     MotorCC = dirt;
+//     digitalWrite(dir_pin, dirt);
+//     delay(pinDelay);
+
+//     step(stp_pin, moveSteps, delayStep);
+//     delay(stableDelay);
+
+//     if(isDataOutput)
+//       DataOutput(false);
+//   }
+// }
+
+void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep, int stableDelay, bool isOutputPosition = true, int pinDelay = 3)
 {
-  Serial.begin(115200);
-  Serial.setTimeout(20); // 設定序列埠接收資料時的最大等待時間
-
-  EEPROM.begin(4096); // 宣告使用EEPROM 4096 個位置
-
-  // I2C Setting for 16 bits adc (Get PD value)
-  I2CADS.begin(I2C_SDA, I2C_SCL, 100000);
-  ads.setGain(GAIN_TWO); // 2x gain   +/- 2.048V  1 bit = 0.0625mV
-  if (!ads.begin(0x48, &I2CADS))
+  if (moveSteps > 0)
   {
-    Serial.println("Failed to initialize ADS.");
-    isGetPower = false;
-  }
-
-#pragma region : WiFi Server Setting
-
-  // 初始化 ESP-NOW
-  WiFi.mode(WIFI_STA);
-  if (esp_now_init() != 0)
-  {
-    Serial.println("Error initializing ESP-NOW");
-    return;
-  }
-  else
-    Serial.println("Initializing ESP-NOW");
-
-  MSGOutput("Station Type: " + String(Station_Type));
-
-  ThisAddr = WiFi.macAddress();
-  Serial.print("ESP32 Board MAC Address:  ");
-  Serial.println(ThisAddr);
-
-  char Colon = ':';
-  int startP = 0;
-  uint8_t value;
-  int indexCount = 0;
-
-  // This Address : String to Hex
-  while (indexCount < sizeof(ThisAddress))
-  {
-    int index = ThisAddr.indexOf(Colon, startP);
-    if (index != -1)
-    {
-      String subS = ThisAddr.substring(startP, index);
-      value = strtoul(subS.c_str(), NULL, 16); // string to Hex
-      startP = index + 1;
-
-      ThisAddress[indexCount] = value;
-      // Serial.println("value:" + String(value, HEX));
-    }
-    else // last one
-    {
-      String subS = ThisAddr.substring(startP);
-      value = strtoul(subS.c_str(), NULL, 16);
-      ThisAddress[indexCount] = value;
-      // Serial.println("value:" + String(value, HEX));
-    }
-    indexCount++;
-  }
-
-  // 設置發送數據回傳函數
-  esp_now_register_send_cb(OnDataSent);
-
-  // 绑定數據接收端
-  esp_now_peer_info_t peerInfo;
-  memset(&peerInfo, 0, sizeof(peerInfo));           // initialize peer if esp32 library version is 2.0.1 (no need in version 1.0.6)
-  memcpy(peerInfo.peer_addr, ControllerAddress, 6); // Register peer
-  peerInfo.channel = 0;
-  peerInfo.encrypt = false;
-
-  // 绑定Server數據接收端
-  esp_now_peer_info_t peerInfo_server;
-  memset(&peerInfo_server, 0, sizeof(peerInfo_server)); // initialize peer if esp32 library version is 2.0.1 (no need in version 1.0.6)
-  memcpy(peerInfo_server.peer_addr, ServerAddress, 6);  // Register peer
-  peerInfo_server.channel = 0;
-  peerInfo_server.encrypt = false;
-
-  // // Add peer
-  if (esp_now_add_peer(&peerInfo) != ESP_OK)
-  {
-    Serial.println("Failed to add peer_controller");
-    return;
-  }
-
-  if (esp_now_add_peer(&peerInfo_server) != ESP_OK)
-  {
-    Serial.println("Failed to add peer_server");
-    return;
-  }
-
-#pragma endregion
-
-#pragma region pinMode Setting
-
-  pinMode(X_STP_Pin, OUTPUT);
-  pinMode(X_DIR_Pin, OUTPUT);
-  pinMode(Y_STP_Pin, OUTPUT);
-  pinMode(Y_DIR_Pin, OUTPUT);
-  pinMode(Z_STP_Pin, OUTPUT);
-  pinMode(Z_DIR_Pin, OUTPUT);
-
-  // VOA Station - Heater
-  if (Station_Type == 1)
-  {
-    pinMode(Heater_Start_Pin, OUTPUT);
-    pinMode(Heater_Stop_Pin, OUTPUT);
-  }
-
-  pinMode(Tablet_PD_mode_Trigger_Pin, OUTPUT);    // Control Tablet Mode
-  digitalWrite(Tablet_PD_mode_Trigger_Pin, true); // false is PD mode, true is Servo mode
-
-#pragma endregion
-
-  Serial.println("~~ Auto-Align System ~~");
-
-#pragma region EEPROM Setting
-
-  String eepromString;
-
-  // Initialize PD_Ref_Array
-  int iniEP = 700;
-  for (size_t i = 0; i < sizeof(EP_PD_Ref_Array) / sizeof(EP_PD_Ref_Array[0]); i++)
-  {
-    EP_PD_Ref_Array[i][0] = iniEP;
-    EP_PD_Ref_Array[i][1] = (iniEP + 8);
-    iniEP += 16;
-
-    eepromString = ReadInfoEEPROM(EP_PD_Ref_Array[i][0], 8);
-    PD_Ref_Array[i][0] = isNumberic(eepromString) ? eepromString.toDouble() : PD_Ref_Array[i][0];
-
-    eepromString = ReadInfoEEPROM(EP_PD_Ref_Array[i][1], 8);
-    PD_Ref_Array[i][1] = isNumberic(eepromString) ? eepromString.toDouble() : PD_Ref_Array[i][1];
-
-    Serial.printf("[%d, %d]:[%.0f, %.2f]\n", EP_PD_Ref_Array[i][0], EP_PD_Ref_Array[i][1], PD_Ref_Array[i][0], PD_Ref_Array[i][1]);
-  }
-
-  for (int i = 0; i < 1000; i = i + 8)
-  {
-    eepromString = ReadInfoEEPROM(i, 8); // Reading EEPROM(int start_position, int data_length)
-    MSGOutput("EEPROM(" + String(i) + ") - " + eepromString);
-  }
-
-  eepromString = ReadInfoEEPROM(EP_PD_Ref, 8); // Reading EEPROM(int start_position, int data_length)
-  ref_Dac = isNumberic(eepromString) ? eepromString.toDouble() : ref_Dac;
-  ref_IL = ILConverter(ref_Dac);
-  MSGOutput("Ref IL: " + String(ref_IL));
-
-  ID = ReadInfoEEPROM(EP_Board_ID, 8);
-  MSGOutput("Board ID: " + ReadInfoEEPROM(8, 8));
-
-  Station_ID = ReadInfoEEPROM(EP_Station_ID, 8);
-  MSGOutput("Station ID: " + ReadInfoEEPROM(16, 8));
-  sendmsg_server.client_name = Station_ID;
-
-  eepromString = ReadInfoEEPROM(EP_Station_Type, 8);
-  Station_Type = isNumberic(eepromString) ? eepromString.toInt() : Station_Type;
-  MSGOutput("Station_Type: " + String(Station_Type));
-
-  eepromString = ReadInfoEEPROM(EP_X_backlash, 8);
-  X_backlash = isNumberic(eepromString) ? eepromString.toInt() : X_backlash;
-  MSGOutput("X_backlash: " + String(X_backlash));
-
-  eepromString = ReadInfoEEPROM(EP_Y_backlash, 8);
-  Y_backlash = isNumberic(eepromString) ? eepromString.toInt() : Y_backlash;
-  MSGOutput("Y_backlash: " + String(Y_backlash));
-
-  eepromString = ReadInfoEEPROM(EP_Z_backlash, 8);
-  Z_backlash = isNumberic(eepromString) ? eepromString.toInt() : Z_backlash;
-  MSGOutput("Z_backlash: " + String(Z_backlash));
-
-  eepromString = ReadInfoEEPROM(EP_delayBetweenStep_X, 8);
-  delayBetweenStep_X = isNumberic(eepromString) ? eepromString.toInt() : delayBetweenStep_X;
-  MSGOutput("delayBetweenStep_X: " + String(delayBetweenStep_X));
-
-  eepromString = ReadInfoEEPROM(EP_delayBetweenStep_Y, 8);
-  delayBetweenStep_Y = isNumberic(eepromString) ? eepromString.toInt() : delayBetweenStep_Y;
-  MSGOutput("delayBetweenStep_Y: " + String(delayBetweenStep_Y));
-
-  eepromString = ReadInfoEEPROM(EP_delayBetweenStep_Z, 8);
-  delayBetweenStep_Z = isNumberic(eepromString) ? eepromString.toInt() : delayBetweenStep_Z;
-  MSGOutput("delayBetweenStep_Z: " + String(delayBetweenStep_Z));
-
-  eepromString = ReadInfoEEPROM(EP_Target_IL, 8);
-  Target_IL = isNumberic(eepromString) ? eepromString.toDouble() : Target_IL;
-  MSGOutput("Target IL: " + String(Target_IL));
-
-  eepromString = ReadInfoEEPROM(EP_AA_ScanFinal_Scan_Delay_X_A, 8);
-  AA_ScanFinal_Scan_Delay_X_A = isNumberic(eepromString) ? eepromString.toInt() : AA_ScanFinal_Scan_Delay_X_A;
-  MSGOutput("AA_ScanFinal_Scan_Delay_X_A: " + String(AA_ScanFinal_Scan_Delay_X_A));
-
-  eepromString = ReadInfoEEPROM(EP_Get_PD_Points, 8);
-  Get_PD_Points = isNumberic(eepromString) ? eepromString.toInt() : Get_PD_Points;
-  Get_PD_Points = Get_PD_Points == 0 ? 1 : Get_PD_Points;
-  MSGOutput("Get_PD_Points: " + String(Get_PD_Points));
-
-  eepromString = ReadInfoEEPROM(EP_AQ_Scan_Compensation_Steps_Z_A, 8);
-  AQ_Scan_Compensation_Steps_Z_A = isNumberic(eepromString) ? eepromString.toInt() : AQ_Scan_Compensation_Steps_Z_A;
-  MSGOutput("AQ_Scan_Compensation_Steps_Z_A: " + String(AQ_Scan_Compensation_Steps_Z_A));
-
-  eepromString = ReadInfoEEPROM(EP_AQ_Total_TimeSpan, 8);
-  AQ_Total_TimeSpan = isNumberic(eepromString) ? eepromString.toInt() : AQ_Total_TimeSpan;
-  MSGOutput("AQ_Total_TimeSpan: " + String(AQ_Total_TimeSpan));
-
-  eepromString = ReadInfoEEPROM(EP_AQ_Scan_Steps_Z_A, 8);
-  AQ_Scan_Steps_Z_A = isNumberic(eepromString) ? eepromString.toInt() : AQ_Scan_Steps_Z_A;
-  MSGOutput("AQ_Scan_Steps_Z_A: " + String(AQ_Scan_Steps_Z_A));
-
-  eepromString = ReadInfoEEPROM(EP_AQ_Scan_Steps_Z_B, 8);
-  AQ_Scan_Steps_Z_B = isNumberic(eepromString) ? eepromString.toInt() : AQ_Scan_Steps_Z_B;
-  MSGOutput("AQ_Scan_Steps_Z_B: " + String(AQ_Scan_Steps_Z_B));
-
-  eepromString = ReadInfoEEPROM(EP_AQ_Scan_Steps_Z_C, 8);
-  AQ_Scan_Steps_Z_C = isNumberic(eepromString) ? eepromString.toInt() : AQ_Scan_Steps_Z_C;
-  MSGOutput("AQ_Scan_Steps_Z_C: " + String(AQ_Scan_Steps_Z_C));
-
-  eepromString = ReadInfoEEPROM(EP_AQ_Scan_Steps_Z_D, 8);
-  AQ_Scan_Steps_Z_D = isNumberic(eepromString) ? eepromString.toInt() : AQ_Scan_Steps_Z_D;
-  MSGOutput("AQ_Scan_Steps_Z_D: " + String(AQ_Scan_Steps_Z_D));
-
-  eepromString = ReadInfoEEPROM(EP_MotorStepRatio, 8);
-  MotorStepRatio = isNumberic(eepromString) ? eepromString.toDouble() : MotorStepRatio;
-  MotorStepRatio = MotorStepRatio == 0 ? 1 : MotorStepRatio;
-  MSGOutput("MotorStepRatio: " + String(MotorStepRatio));
-
-  eepromString = ReadInfoEEPROM(EP_MotorStepDelayRatio, 8);
-  MotorStepDelayRatio = isNumberic(eepromString) ? eepromString.toDouble() : MotorStepDelayRatio;
-  MotorStepDelayRatio = MotorStepDelayRatio == 0 ? 1 : MotorStepDelayRatio;
-  MSGOutput("MotorStepDelayRatio: " + String(MotorStepDelayRatio));
-
-  eepromString = ReadInfoEEPROM(EP_FS_Count_X, 8);
-  FS_Count_X = isNumberic(eepromString) ? eepromString.toInt() : FS_Count_X;
-  MSGOutput("FS_Count_X: " + String(FS_Count_X));
-
-  eepromString = ReadInfoEEPROM(EP_FS_Steps_X, 8);
-  FS_Steps_X = isNumberic(eepromString) ? eepromString.toInt() : FS_Steps_X;
-  MSGOutput("FS_Steps_X: " + String(FS_Steps_X));
-
-  eepromString = ReadInfoEEPROM(EP_FS_Stable_X, 8);
-  FS_Stable_X = isNumberic(eepromString) ? eepromString.toInt() : FS_Stable_X;
-  MSGOutput("FS_Stable_X: " + String(FS_Stable_X));
-
-  eepromString = ReadInfoEEPROM(EP_FS_DelaySteps_X, 8);
-  FS_DelaySteps_X = isNumberic(eepromString) ? eepromString.toInt() : FS_DelaySteps_X;
-  MSGOutput("FS_DelaySteps_X: " + String(FS_DelaySteps_X));
-
-  eepromString = ReadInfoEEPROM(EP_FS_Avg_X, 8);
-  FS_Avg_X = isNumberic(eepromString) ? eepromString.toInt() : FS_Avg_X;
-  MSGOutput("FS_Avg_X: " + String(FS_Avg_X));
-
-  eepromString = ReadInfoEEPROM(EP_FS_Count_Y, 8);
-  FS_Count_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_Count_Y;
-  MSGOutput("FS_Count_Y: " + String(FS_Count_Y));
-
-  eepromString = ReadInfoEEPROM(EP_FS_Steps_Y, 8);
-  FS_Steps_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_Steps_Y;
-  MSGOutput("FS_Steps_Y: " + String(FS_Steps_Y));
-
-  eepromString = ReadInfoEEPROM(EP_FS_Stable_Y, 8);
-  FS_Stable_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_Stable_Y;
-  MSGOutput("FS_Stable_Y: " + String(FS_Stable_Y));
-
-  eepromString = ReadInfoEEPROM(EP_FS_DelaySteps_Y, 8);
-  FS_DelaySteps_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_DelaySteps_Y;
-  MSGOutput("FS_DelaySteps_Y: " + String(FS_DelaySteps_Y));
-
-  eepromString = ReadInfoEEPROM(EP_FS_Avg_Y, 8);
-  FS_Avg_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_Avg_Y;
-  MSGOutput("FS_Avg_Y: " + String(FS_Avg_Y));
-
-  eepromString = ReadInfoEEPROM(EP_FS_Count_Z, 8);
-  FS_Count_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_Count_Z;
-  MSGOutput("FS_Count_Z: " + String(FS_Count_Z));
-
-  eepromString = ReadInfoEEPROM(EP_FS_Steps_Z, 8);
-  FS_Steps_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_Steps_Z;
-  MSGOutput("FS_Steps_Z: " + String(FS_Steps_Z));
-
-  eepromString = ReadInfoEEPROM(EP_FS_Stable_Z, 8);
-  FS_Stable_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_Stable_Z;
-  MSGOutput("FS_Stable_Z: " + String(FS_Stable_Z));
-
-  eepromString = ReadInfoEEPROM(EP_FS_DelaySteps_Z, 8);
-  FS_DelaySteps_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_DelaySteps_Z;
-  MSGOutput("FS_DelaySteps_Z: " + String(FS_DelaySteps_Z));
-
-  eepromString = ReadInfoEEPROM(EP_FS_Avg_Z, 8);
-  FS_Avg_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_Avg_Z;
-  MSGOutput("FS_Avg_Z: " + String(FS_Avg_Z));
-
-  eepromString = ReadInfoEEPROM(EP_FS_Trips_X, 8);
-  FS_Trips_X = isNumberic(eepromString) ? eepromString.toInt() : FS_Trips_X;
-  MSGOutput("FS_Trips_X: " + String(FS_Trips_X));
-
-  eepromString = ReadInfoEEPROM(EP_FS_Trips_Y, 8);
-  FS_Trips_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_Trips_Y;
-  MSGOutput("FS_Trips_Y: " + String(FS_Trips_Y));
-
-  eepromString = ReadInfoEEPROM(EP_FS_Trips_Z, 8);
-  FS_Trips_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_Trips_Z;
-  MSGOutput("FS_Trips_Z: " + String(FS_Trips_Z));
-
-  eepromString = ReadInfoEEPROM(EP_FS_GradientTarget_X, 8);
-  FS_GradientTarget_X = isNumberic(eepromString) ? eepromString.toDouble() : FS_GradientTarget_X;
-  MSGOutput("FS_GradientTarget_X: " + String(FS_GradientTarget_X));
-
-  eepromString = ReadInfoEEPROM(EP_FS_GradientTarget_Y, 8);
-  FS_GradientTarget_Y = isNumberic(eepromString) ? eepromString.toDouble() : FS_GradientTarget_Y;
-  MSGOutput("FS_GradientTarget_Y: " + String(FS_GradientTarget_Y));
-
-  eepromString = ReadInfoEEPROM(EP_FS_GradientTarget_Z, 8);
-  FS_GradientTarget_Z = isNumberic(eepromString) ? eepromString.toDouble() : FS_GradientTarget_Z;
-  MSGOutput("FS_GradientTarget_Z: " + String(FS_GradientTarget_Z));
-
-  eepromString = ReadInfoEEPROM(EP_AA_ScanRough_Feed_Steps_Z_A, 8);
-  AA_ScanRough_Feed_Steps_Z_A = isNumberic(eepromString) ? eepromString.toInt() : AA_ScanRough_Feed_Steps_Z_A;
-  MSGOutput("AA_ScanRough_Feed_Steps_Z_A: " + String(AA_ScanRough_Feed_Steps_Z_A));
-
-  eepromString = ReadInfoEEPROM(EP_AA_ScanRough_Feed_Steps_Z_B, 8);
-  AA_ScanRough_Feed_Steps_Z_B = isNumberic(eepromString) ? eepromString.toInt() : AA_ScanRough_Feed_Steps_Z_B;
-  MSGOutput("AA_ScanRough_Feed_Steps_Z_B: " + String(AA_ScanRough_Feed_Steps_Z_B));
-
-  eepromString = ReadInfoEEPROM(EP_AA_ScanRough_Feed_Ratio_Z_A, 8);
-  AA_ScanRough_Feed_Ratio_Z_A = isNumberic(eepromString) ? eepromString.toDouble() : AA_ScanRough_Feed_Ratio_Z_A;
-  MSGOutput("AA_ScanRough_Feed_Ratio_Z_A: " + String(AA_ScanRough_Feed_Ratio_Z_A));
-
-  eepromString = ReadInfoEEPROM(EP_AA_ScanRough_Feed_Ratio_Z_B, 8);
-  AA_ScanRough_Feed_Ratio_Z_B = isNumberic(eepromString) ? eepromString.toDouble() : AA_ScanRough_Feed_Ratio_Z_B;
-  MSGOutput("AA_ScanRough_Feed_Ratio_Z_B: " + String(AA_ScanRough_Feed_Ratio_Z_B));
-
-  eepromString = ReadInfoEEPROM(EP_AA_ScanRough_Feed_Ratio_Z_C, 8);
-  AA_ScanRough_Feed_Ratio_Z_C = isNumberic(eepromString) ? eepromString.toDouble() : AA_ScanRough_Feed_Ratio_Z_C;
-  MSGOutput("AA_ScanRough_Feed_Ratio_Z_C: " + String(AA_ScanRough_Feed_Ratio_Z_C));
-
-  eepromString = ReadInfoEEPROM(EP_AA_ScanRough_Feed_Ratio_Z_D, 8);
-  AA_ScanRough_Feed_Ratio_Z_D = isNumberic(eepromString) ? eepromString.toDouble() : AA_ScanRough_Feed_Ratio_Z_D;
-  MSGOutput("AA_ScanRough_Feed_Ratio_Z_D: " + String(AA_ScanRough_Feed_Ratio_Z_D));
-
-#pragma endregion
-
-  // Check Server is connected
-  isWiFiConnected = true;
-  isCheckingServer = true;
-  DataSent_Server("ID?");
-  Serial.println("isServerConnected:" + String(isWiFiConnected));
-  isCheckingServer = false;
-
-  nowMillis_DataRec = millis();
-
-  // 在core 0啟動 mision 1
-  xTaskCreatePinnedToCore(
-      Task_1_sendData, /* 任務實際對應的Function */
-      "Task_1",        /* 任務名稱 */
-      10000,           /* 堆疊空間 */
-      NULL,            /* 無輸入值 */
-      12,              /* 優先序0(0為最低) */
-      &Task_1,         /* 對應的任務變數位址 */
-      0);              /*指定在核心0執行 */
-
-  motorType = Phase_5;
-  if (motorType == HomeMade)
-    isTrip3Jump = false;
-
-  DataOutput(false);
-}
-
-bool isMsgShow = false;
-unsigned long previousMillis = 0;
-const long interval = 100; // default:2000
-String Data;
-
-String ServerIP = "http://192.168.4.1/";
-const char *serverTestData = "http://192.168.4.1/?param1=10&param2=hi";
-
-int LoopCount = 0;
-
-void loop()
-{
-  unsigned long currentMillis = millis();
-
-  if (currentMillis - previousMillis >= interval)
-  {
-    LoopCount++;
-    previousMillis = currentMillis;
-
-    // Re-Initialize
-    isStop = false;
-    ButtonSelected = -1;
-
-    // Keyboard Detect
-    //  ButtonSelected = KeyValueConverter();
-    if (ButtonSelected != -1)
-      Motor_Continous_Mode = 1;
-
-    String cmd = "";
-    String rsMsg = "";
-    if (Serial.available())
-    {
-      rsMsg = Serial.readString();
-      cmd = rsMsg;
-      if (cmd != "")
-        Motor_Continous_Mode = 2;
-    }
-
-    if (cmd_from_contr != "")
-    {
-      cmd = cmd_from_contr;
-
-      if (cmd_value_from_contr != "")
-      {
-        int valueContr = cmd_value_from_contr.toDouble();
-
-        if (!isStop)
-        {
-          Serial.print("msg:" + cmd_from_contr);
-          Serial.println(", value:" + cmd_value_from_contr);
-        }
-
-        // Motor move cmd from controller
-        if (cmd == "BS")
-        {
-          ButtonSelected = valueContr;
-          Motor_Continous_Mode = 3;
-        }
-      }
-    }
-
-    cmd_No = Function_Classification(cmd, ButtonSelected);
-
-    cmd_No = Function_Excecutation(cmd, cmd_No);
-
-    // isGetPower
-    if (isGetPower && (LoopCount >= 5) && cmd_No <= 100)
-    {
-      LoopCount = 0;
-      if (true)
-      {
-        double value;
-
-        switch (GetPower_Mode)
-        {
-        case 1:
-          value = Cal_PD_Input_IL(Get_PD_Points);
-          break;
-
-        case 2:
-          value = Cal_PD_Input_Dac(Get_PD_Points);
-          break;
-
-        case 3:
-          value = Cal_PD_Input_Row_IL(Get_PD_Points);
-          break;
-
-        case 4:
-          value = Cal_PD_Input_Row_Dac(Get_PD_Points);
-          break;
-
-        default:
-          break;
-        }
-
-        MSGOutput("PD_Power:" + String(value));       // dB
-        DataSent_Server("PD_Power:" + String(value)); // Send to Server and check is connected or not !!
-      }
-    }
-
-    cmd_from_contr = "";
-    cmd_value_from_contr = "";
+    MotorCC = dirt;
+    digitalWrite(dir_pin, dirt);
+    delay(pinDelay);
+
+    step(stp_pin, moveSteps, delayStep);
+    delay(stableDelay);
+
+    if (isOutputPosition)
+      DataOutput(false);
   }
 }
-
-//------------------------------------------------------------------------------------------------------------------------------------------
 
 void Move_Motor_abs(int xyz, long Target)
 {
@@ -1489,16 +1071,6 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT = 10)
     MSGOutput("Delta Distance All 0");
     return;
   }
-  // else
-  // {
-  //   MSGOutput("Delta Distance ");
-  //   MSGOutput(String(Delta_X));
-  //   MSGOutput(String(Delta_Y));
-  //   MSGOutput(String(Delta_Z));
-  // }
-
-  // delayBetweenStep = 10; // Target Speed
-  // int Delay = DelayT;
 
   // 分時多工
   Delta_X = abs(Delta_X);
@@ -1618,36 +1190,6 @@ void Move_Motor_abs_all(int x, int y, int z, bool IsMsg, int DelayT = 10)
     MSGOutput("Move All Abs End");
 }
 
-void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep, int stableDelay)
-{
-  if (moveSteps > 0)
-  {
-    MotorCC = dirt;
-    digitalWrite(dir_pin, dirt);
-    delay(3);
-
-    step(stp_pin, moveSteps, delayStep);
-    delay(stableDelay);
-    DataOutput(false);
-  }
-}
-
-void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep, int stableDelay, bool isOutputPosition)
-{
-  if (moveSteps > 0)
-  {
-    MotorCC = dirt;
-    digitalWrite(dir_pin, dirt);
-    delay(3);
-
-    step(stp_pin, moveSteps, delayStep);
-    delay(stableDelay);
-
-    if (isOutputPosition)
-      DataOutput(false);
-  }
-}
-
 void Move_Motor_Cont(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep)
 {
   MotorSTP_Pin = dir_pin;
@@ -1661,6 +1203,667 @@ void Move_Motor_Cont(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int 
   }
 
   step(stp_pin, moveSteps, delayStep);
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+#define Enc_X_outputA 12 //定義 X axis encoder A pin
+#define Enc_X_outputB 14 //定義 X axis encoder B pin
+#define Enc_Y_outputA 27 //定義 Y axis encoder A pin
+#define Enc_Y_outputB 26 //定義 Y axis encoder B pin
+#define Enc_Z_outputA 25 //定義 Z axis encoder A pin
+#define Enc_Z_outputB 33 //定義 Z axis encoder B pin
+
+int counter = 0; //定義 counter 為 int 類型變數，且初始值為0
+int aState_X; //定義 aState 為 int 類型變數
+int aLastState_X; //定義 aLastState 為 int 類型變數
+int aState_Y; //定義 aState 為 int 類型變數
+int aLastState_Y; //定義 aLastState 為 int 類型變數
+int aState_Z; //定義 aState 為 int 類型變數
+int aLastState_Z; //定義 aLastState 為 int 類型變數
+
+bool X_DIR_True = true;
+bool X_DIR_False = false;
+bool Y_DIR_True = true;
+bool Y_DIR_False = false;
+bool Z_DIR_True = true;
+bool Z_DIR_False = false;
+
+int IsDirtReverse_X = 0;
+int IsDirtReverse_Y = 0;
+int IsDirtReverse_Z = 0;
+
+int Encoder_Motor_Step_X = 60;
+int Encoder_Motor_Step_Y = 60;
+int Encoder_Motor_Step_Z = 60;
+
+// bool isMotorCont = false;
+
+// int Encoder_Motor_Step = 60;
+void Task_1_Encoder(void *pvParameters)
+{
+  while (true)
+  {
+    //Encoder X
+    {
+      aState_X = digitalRead(Enc_X_outputA); //將outputA的讀取值 設給 aState
+        
+      //條件判斷，當aState 不等於 aLastState時發生 
+      if (aState_X != aLastState_X)
+      {
+        MotorCC = MotorCC_X;
+
+        //條件判斷，當outputB讀取值 不等於 aState時發生
+        if (digitalRead(Enc_X_outputB) != aState_X) 
+          Move_Motor(X_DIR_Pin, X_STP_Pin, X_DIR_True , Encoder_Motor_Step_X, delayBetweenStep_X, 0, false, 0);
+        else 
+          Move_Motor(X_DIR_Pin, X_STP_Pin, X_DIR_False , Encoder_Motor_Step_X, delayBetweenStep_X, 0, false, 0);
+      }
+
+      aLastState_X = aState_X; //將aState 最後的值 設給 aLastState
+    }
+
+    //Encoder Y
+    {
+      aState_Y = digitalRead(Enc_Y_outputA); //將outputA的讀取值 設給 aState
+        
+      MotorCC = MotorCC_Y;
+        
+      //條件判斷，當aState 不等於 aLastState時發生 
+      if (aState_Y != aLastState_Y)
+      {
+        //條件判斷，當outputB讀取值 不等於 aState時發生
+        if (digitalRead(Enc_Y_outputB) != aState_Y) {
+          Move_Motor(Y_DIR_Pin, Y_STP_Pin, Y_DIR_True, Encoder_Motor_Step_Y, delayBetweenStep_Y, 0, false, 0);
+        }
+        else {
+          Move_Motor(Y_DIR_Pin, Y_STP_Pin, Y_DIR_False, Encoder_Motor_Step_Y, delayBetweenStep_Y, 0, false, 0);
+        }
+      }
+
+      aLastState_Y = aState_Y; //將aState 最後的值 設給 aLastState
+    }
+
+    //Encoder Z
+    {
+      aState_Z = digitalRead(Enc_Z_outputA); //將outputA的讀取值 設給 aState
+        
+      MotorCC = MotorCC_Z;
+        
+      //條件判斷，當aState 不等於 aLastState時發生 
+      if (aState_Z != aLastState_Z)
+      {
+        //條件判斷，當outputB讀取值 不等於 aState時發生
+        if (digitalRead(Enc_Z_outputB) != aState_Z) {
+          Move_Motor(Z_DIR_Pin, Z_STP_Pin, Z_DIR_True, Encoder_Motor_Step_Z, delayBetweenStep_Z, 0, false, 0);
+        }
+        else {
+          Move_Motor(Z_DIR_Pin, Z_STP_Pin, Z_DIR_False, Encoder_Motor_Step_Z, delayBetweenStep_Z, 0, false, 0);
+        }
+      }
+
+      aLastState_Z = aState_Z; //將aState 最後的值 設給 aLastState
+    }
+  
+    // delay(2); 
+    CheckStop();
+  }
+
+
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void setup()
+{
+  Serial.begin(115200);
+  Serial.setTimeout(20); // 設定序列埠接收資料時的最大等待時間
+
+  EEPROM.begin(4096); // 宣告使用EEPROM 4096 個位置
+
+  // I2C Setting for 16 bits adc (Get PD value)
+  I2CADS.begin(I2C_SDA, I2C_SCL, 100000);
+  ads.setGain(GAIN_TWO); // 2x gain   +/- 2.048V  1 bit = 0.0625mV
+  if (!ads.begin(0x48, &I2CADS))
+  {
+    Serial.println("Failed to initialize ADS.");
+    isGetPower = false;
+  }
+
+  String epString = ReadInfoEEPROM(EP_Station_Type, 8);
+  Station_Type = isNumberic(epString) ? epString.toInt() : Station_Type;
+  MSGOutput("Station Type: " + String(Station_Type));
+
+
+#pragma region : WiFi Server Setting
+
+  // 初始化 ESP-NOW
+  if(true)
+  {
+    WiFi.mode(WIFI_STA);
+    if (esp_now_init() != 0)
+    {
+      Serial.println("Error initializing ESP-NOW");
+      return;
+    }
+    else
+      Serial.println("Initializing ESP-NOW");
+
+    ThisAddr = WiFi.macAddress();
+    // Serial.printf("ESP32 Board MAC Address: %s\n", ThisAddr);
+    Serial.print("ESP32 Board MAC Address:  ");
+    Serial.println(ThisAddr);
+
+    char Colon = ':';
+    int startP = 0;
+    uint8_t value;
+    int indexCount = 0;
+
+    // This Address : String to Hex
+    while (indexCount < sizeof(ThisAddress))
+    {
+      int index = ThisAddr.indexOf(Colon, startP);
+      if (index != -1)
+      {
+        String subS = ThisAddr.substring(startP, index);
+        value = strtoul(subS.c_str(), NULL, 16); // string to Hex
+        startP = index + 1;
+
+        ThisAddress[indexCount] = value;
+        // Serial.println("value:" + String(value, HEX));
+      }
+      else // last one
+      {
+        String subS = ThisAddr.substring(startP);
+        value = strtoul(subS.c_str(), NULL, 16);
+        ThisAddress[indexCount] = value;
+        // Serial.println("value:" + String(value, HEX));
+      }
+      indexCount++;
+    }
+
+    // 設置發送數據回傳函數
+    esp_now_register_send_cb(OnDataSent);
+
+    // 绑定數據接收端
+    esp_now_peer_info_t peerInfo;
+    memset(&peerInfo, 0, sizeof(peerInfo));           // initialize peer if esp32 library version is 2.0.1 (no need in version 1.0.6)
+    memcpy(peerInfo.peer_addr, ControllerAddress, 6); // Register peer
+    peerInfo.channel = 0;
+    peerInfo.encrypt = false;
+
+    // 绑定Server數據接收端
+    esp_now_peer_info_t peerInfo_server;
+    memset(&peerInfo_server, 0, sizeof(peerInfo_server)); // initialize peer if esp32 library version is 2.0.1 (no need in version 1.0.6)
+    memcpy(peerInfo_server.peer_addr, ServerAddress, 6);  // Register peer
+    peerInfo_server.channel = 0;
+    peerInfo_server.encrypt = false;
+
+    // // Add peer
+    if (esp_now_add_peer(&peerInfo) != ESP_OK)
+    {
+      Serial.println("Failed to add peer_controller");
+      return;
+    }
+
+    if (esp_now_add_peer(&peerInfo_server) != ESP_OK)
+    {
+      Serial.println("Failed to add peer_server");
+      return;
+    }
+  }
+
+#pragma endregion
+
+#pragma region pinMode Setting
+
+  pinMode(X_STP_Pin, OUTPUT);
+  pinMode(X_DIR_Pin, OUTPUT);
+  pinMode(Y_STP_Pin, OUTPUT);
+  pinMode(Y_DIR_Pin, OUTPUT);
+  pinMode(Z_STP_Pin, OUTPUT);
+  pinMode(Z_DIR_Pin, OUTPUT);
+
+  // VOA Station - Heater
+  if (Station_Type == 1)
+  {
+    pinMode(Heater_Start_Pin, OUTPUT);
+    pinMode(Heater_Stop_Pin, OUTPUT);
+  }
+  else if (Station_Type == 3)
+  {
+    pinMode (Enc_X_outputA, INPUT_PULLUP); 
+    pinMode (Enc_X_outputB, INPUT_PULLUP); 
+    pinMode (Enc_Y_outputA, INPUT_PULLUP);
+    pinMode (Enc_Y_outputB, INPUT_PULLUP); 
+    pinMode (Enc_Z_outputA, INPUT_PULLUP); 
+    pinMode (Enc_Z_outputB, INPUT_PULLUP); 
+
+    aLastState_X = digitalRead(Enc_X_outputA); //將初始outputA的讀取值 設給 aLastState
+    aLastState_Y = digitalRead(Enc_Y_outputA); //將初始outputA的讀取值 設給 aLastState
+    aLastState_Z = digitalRead(Enc_Z_outputA); //將初始outputA的讀取值 設給 aLastState
+  }
+
+  pinMode(Tablet_PD_mode_Trigger_Pin, OUTPUT);    // Control Tablet Mode
+  digitalWrite(Tablet_PD_mode_Trigger_Pin, true); // false is PD mode, true is Servo mode
+
+#pragma endregion
+
+  Serial.println("~~ Auto-Align System ~~");
+
+#pragma region EEPROM Setting
+
+  String eepromString;
+
+  // Initialize PD_Ref_Array
+  int iniEP = 700;
+  for (size_t i = 0; i < sizeof(EP_PD_Ref_Array) / sizeof(EP_PD_Ref_Array[0]); i++)
+  {
+    EP_PD_Ref_Array[i][0] = iniEP;
+    EP_PD_Ref_Array[i][1] = (iniEP + 8);
+    iniEP += 16;
+
+    eepromString = ReadInfoEEPROM(EP_PD_Ref_Array[i][0], 8);
+    PD_Ref_Array[i][0] = isNumberic(eepromString) ? eepromString.toDouble() : PD_Ref_Array[i][0];
+
+    eepromString = ReadInfoEEPROM(EP_PD_Ref_Array[i][1], 8);
+    PD_Ref_Array[i][1] = isNumberic(eepromString) ? eepromString.toDouble() : PD_Ref_Array[i][1];
+
+    Serial.printf("[%d, %d]:[%.0f, %.2f]\n", EP_PD_Ref_Array[i][0], EP_PD_Ref_Array[i][1], PD_Ref_Array[i][0], PD_Ref_Array[i][1]);
+  }
+
+  for (int i = 0; i < 1000; i = i + 8)
+  {
+    eepromString = ReadInfoEEPROM(i, 8); // Reading EEPROM(int start_position, int data_length)
+    MSGOutput("EEPROM(" + String(i) + ") - " + eepromString);
+  }
+
+  eepromString = ReadInfoEEPROM(EP_PD_Ref, 8); // Reading EEPROM(int start_position, int data_length)
+  ref_Dac = isNumberic(eepromString) ? eepromString.toDouble() : ref_Dac;
+  ref_IL = ILConverter(ref_Dac);
+  MSGOutput("Ref IL: " + String(ref_IL));
+
+  ID = ReadInfoEEPROM(EP_Board_ID, 8);
+  MSGOutput("Board ID: " + ReadInfoEEPROM(8, 8));
+
+  Station_ID = ReadInfoEEPROM(EP_Station_ID, 8);
+  MSGOutput("Station ID: " + ReadInfoEEPROM(16, 8));
+  sendmsg_server.client_name = Station_ID;
+
+  eepromString = ReadInfoEEPROM(EP_Station_Type, 8);
+  Station_Type = isNumberic(eepromString) ? eepromString.toInt() : Station_Type;
+  MSGOutput("Station_Type: " + String(Station_Type));
+
+  eepromString = ReadInfoEEPROM(EP_X_backlash, 8);
+  X_backlash = isNumberic(eepromString) ? eepromString.toInt() : X_backlash;
+  MSGOutput("X_backlash: " + String(X_backlash));
+
+  eepromString = ReadInfoEEPROM(EP_Y_backlash, 8);
+  Y_backlash = isNumberic(eepromString) ? eepromString.toInt() : Y_backlash;
+  MSGOutput("Y_backlash: " + String(Y_backlash));
+
+  eepromString = ReadInfoEEPROM(EP_Z_backlash, 8);
+  Z_backlash = isNumberic(eepromString) ? eepromString.toInt() : Z_backlash;
+  MSGOutput("Z_backlash: " + String(Z_backlash));
+
+  eepromString = ReadInfoEEPROM(EP_delayBetweenStep_X, 8);
+  delayBetweenStep_X = isNumberic(eepromString) ? eepromString.toInt() : delayBetweenStep_X;
+  MSGOutput("delayBetweenStep_X: " + String(delayBetweenStep_X));
+
+  eepromString = ReadInfoEEPROM(EP_delayBetweenStep_Y, 8);
+  delayBetweenStep_Y = isNumberic(eepromString) ? eepromString.toInt() : delayBetweenStep_Y;
+  MSGOutput("delayBetweenStep_Y: " + String(delayBetweenStep_Y));
+
+  eepromString = ReadInfoEEPROM(EP_delayBetweenStep_Z, 8);
+  delayBetweenStep_Z = isNumberic(eepromString) ? eepromString.toInt() : delayBetweenStep_Z;
+  MSGOutput("delayBetweenStep_Z: " + String(delayBetweenStep_Z));
+
+  eepromString = ReadInfoEEPROM(EP_Target_IL, 8);
+  Target_IL = isNumberic(eepromString) ? eepromString.toDouble() : Target_IL;
+  MSGOutput("Target IL: " + String(Target_IL));
+
+  eepromString = ReadInfoEEPROM(EP_AA_ScanFinal_Scan_Delay_X_A, 8);
+  AA_ScanFinal_Scan_Delay_X_A = isNumberic(eepromString) ? eepromString.toInt() : AA_ScanFinal_Scan_Delay_X_A;
+  MSGOutput("AA_ScanFinal_Scan_Delay_X_A: " + String(AA_ScanFinal_Scan_Delay_X_A));
+
+
+  eepromString = ReadInfoEEPROM(EP_Motor_DIR_X, 8);
+  IsDirtReverse_X = isNumberic(eepromString) ? eepromString.toInt() : IsDirtReverse_X;
+  MSGOutput("IsDirtReverse_X: " + String(IsDirtReverse_X));
+
+  eepromString = ReadInfoEEPROM(EP_Motor_DIR_Y, 8);
+  IsDirtReverse_Y = isNumberic(eepromString) ? eepromString.toInt() : IsDirtReverse_Y;
+  MSGOutput("IsDirtReverse_Y: " + String(IsDirtReverse_Y));
+
+  eepromString = ReadInfoEEPROM(EP_Motor_DIR_Z, 8);
+  IsDirtReverse_Z = isNumberic(eepromString) ? eepromString.toInt() : IsDirtReverse_Z;
+  MSGOutput("IsDirtReverse_Y: " + String(IsDirtReverse_Z));
+
+  eepromString = ReadInfoEEPROM(EP_Encoder_Motor_Step_X, 8);
+  Encoder_Motor_Step_X = isNumberic(eepromString) ? eepromString.toInt() : Encoder_Motor_Step_X;
+  MSGOutput("Encoder_Motor_Step_X: " + String(Encoder_Motor_Step_X));
+
+  eepromString = ReadInfoEEPROM(EP_Encoder_Motor_Step_Y, 8);
+  Encoder_Motor_Step_Y = isNumberic(eepromString) ? eepromString.toInt() : Encoder_Motor_Step_Y;
+  MSGOutput("Encoder_Motor_Step_Y: " + String(Encoder_Motor_Step_Y));
+
+  eepromString = ReadInfoEEPROM(EP_Encoder_Motor_Step_Z, 8);
+  Encoder_Motor_Step_Z = isNumberic(eepromString) ? eepromString.toInt() : Encoder_Motor_Step_Z;
+  MSGOutput("Encoder_Motor_Step_Z: " + String(Encoder_Motor_Step_Z));
+
+
+  eepromString = ReadInfoEEPROM(EP_Get_PD_Points, 8);
+  Get_PD_Points = isNumberic(eepromString) ? eepromString.toInt() : Get_PD_Points;
+  Get_PD_Points = Get_PD_Points == 0 ? 1 : Get_PD_Points;
+  MSGOutput("Get_PD_Points: " + String(Get_PD_Points));
+
+  eepromString = ReadInfoEEPROM(EP_AQ_Scan_Compensation_Steps_Z_A, 8);
+  AQ_Scan_Compensation_Steps_Z_A = isNumberic(eepromString) ? eepromString.toInt() : AQ_Scan_Compensation_Steps_Z_A;
+  MSGOutput("AQ_Scan_Compensation_Steps_Z_A: " + String(AQ_Scan_Compensation_Steps_Z_A));
+
+  eepromString = ReadInfoEEPROM(EP_AQ_Total_TimeSpan, 8);
+  AQ_Total_TimeSpan = isNumberic(eepromString) ? eepromString.toInt() : AQ_Total_TimeSpan;
+  MSGOutput("AQ_Total_TimeSpan: " + String(AQ_Total_TimeSpan));
+
+  eepromString = ReadInfoEEPROM(EP_AQ_Scan_Steps_Z_A, 8);
+  AQ_Scan_Steps_Z_A = isNumberic(eepromString) ? eepromString.toInt() : AQ_Scan_Steps_Z_A;
+  MSGOutput("AQ_Scan_Steps_Z_A: " + String(AQ_Scan_Steps_Z_A));
+
+  eepromString = ReadInfoEEPROM(EP_AQ_Scan_Steps_Z_B, 8);
+  AQ_Scan_Steps_Z_B = isNumberic(eepromString) ? eepromString.toInt() : AQ_Scan_Steps_Z_B;
+  MSGOutput("AQ_Scan_Steps_Z_B: " + String(AQ_Scan_Steps_Z_B));
+
+  eepromString = ReadInfoEEPROM(EP_AQ_Scan_Steps_Z_C, 8);
+  AQ_Scan_Steps_Z_C = isNumberic(eepromString) ? eepromString.toInt() : AQ_Scan_Steps_Z_C;
+  MSGOutput("AQ_Scan_Steps_Z_C: " + String(AQ_Scan_Steps_Z_C));
+
+  eepromString = ReadInfoEEPROM(EP_AQ_Scan_Steps_Z_D, 8);
+  AQ_Scan_Steps_Z_D = isNumberic(eepromString) ? eepromString.toInt() : AQ_Scan_Steps_Z_D;
+  MSGOutput("AQ_Scan_Steps_Z_D: " + String(AQ_Scan_Steps_Z_D));
+
+  eepromString = ReadInfoEEPROM(EP_MotorStepRatio, 8);
+  MotorStepRatio = isNumberic(eepromString) ? eepromString.toDouble() : MotorStepRatio;
+  MotorStepRatio = MotorStepRatio == 0 ? 1 : MotorStepRatio;
+  MSGOutput("MotorStepRatio: " + String(MotorStepRatio));
+
+  eepromString = ReadInfoEEPROM(EP_MotorStepDelayRatio, 8);
+  MotorStepDelayRatio = isNumberic(eepromString) ? eepromString.toDouble() : MotorStepDelayRatio;
+  MotorStepDelayRatio = MotorStepDelayRatio == 0 ? 1 : MotorStepDelayRatio;
+  MSGOutput("MotorStepDelayRatio: " + String(MotorStepDelayRatio));
+
+  eepromString = ReadInfoEEPROM(EP_FS_Count_X, 8);
+  FS_Count_X = isNumberic(eepromString) ? eepromString.toInt() : FS_Count_X;
+  MSGOutput("FS_Count_X: " + String(FS_Count_X));
+
+  eepromString = ReadInfoEEPROM(EP_FS_Steps_X, 8);
+  FS_Steps_X = isNumberic(eepromString) ? eepromString.toInt() : FS_Steps_X;
+  MSGOutput("FS_Steps_X: " + String(FS_Steps_X));
+
+  eepromString = ReadInfoEEPROM(EP_FS_Stable_X, 8);
+  FS_Stable_X = isNumberic(eepromString) ? eepromString.toInt() : FS_Stable_X;
+  MSGOutput("FS_Stable_X: " + String(FS_Stable_X));
+
+  eepromString = ReadInfoEEPROM(EP_FS_DelaySteps_X, 8);
+  FS_DelaySteps_X = isNumberic(eepromString) ? eepromString.toInt() : FS_DelaySteps_X;
+  MSGOutput("FS_DelaySteps_X: " + String(FS_DelaySteps_X));
+
+  eepromString = ReadInfoEEPROM(EP_FS_Avg_X, 8);
+  FS_Avg_X = isNumberic(eepromString) ? eepromString.toInt() : FS_Avg_X;
+  MSGOutput("FS_Avg_X: " + String(FS_Avg_X));
+
+  eepromString = ReadInfoEEPROM(EP_FS_Count_Y, 8);
+  FS_Count_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_Count_Y;
+  MSGOutput("FS_Count_Y: " + String(FS_Count_Y));
+
+  eepromString = ReadInfoEEPROM(EP_FS_Steps_Y, 8);
+  FS_Steps_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_Steps_Y;
+  MSGOutput("FS_Steps_Y: " + String(FS_Steps_Y));
+
+  eepromString = ReadInfoEEPROM(EP_FS_Stable_Y, 8);
+  FS_Stable_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_Stable_Y;
+  MSGOutput("FS_Stable_Y: " + String(FS_Stable_Y));
+
+  eepromString = ReadInfoEEPROM(EP_FS_DelaySteps_Y, 8);
+  FS_DelaySteps_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_DelaySteps_Y;
+  MSGOutput("FS_DelaySteps_Y: " + String(FS_DelaySteps_Y));
+
+  eepromString = ReadInfoEEPROM(EP_FS_Avg_Y, 8);
+  FS_Avg_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_Avg_Y;
+  MSGOutput("FS_Avg_Y: " + String(FS_Avg_Y));
+
+  eepromString = ReadInfoEEPROM(EP_FS_Count_Z, 8);
+  FS_Count_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_Count_Z;
+  MSGOutput("FS_Count_Z: " + String(FS_Count_Z));
+
+  eepromString = ReadInfoEEPROM(EP_FS_Steps_Z, 8);
+  FS_Steps_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_Steps_Z;
+  MSGOutput("FS_Steps_Z: " + String(FS_Steps_Z));
+
+  eepromString = ReadInfoEEPROM(EP_FS_Stable_Z, 8);
+  FS_Stable_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_Stable_Z;
+  MSGOutput("FS_Stable_Z: " + String(FS_Stable_Z));
+
+  eepromString = ReadInfoEEPROM(EP_FS_DelaySteps_Z, 8);
+  FS_DelaySteps_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_DelaySteps_Z;
+  MSGOutput("FS_DelaySteps_Z: " + String(FS_DelaySteps_Z));
+
+  eepromString = ReadInfoEEPROM(EP_FS_Avg_Z, 8);
+  FS_Avg_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_Avg_Z;
+  MSGOutput("FS_Avg_Z: " + String(FS_Avg_Z));
+
+  eepromString = ReadInfoEEPROM(EP_FS_Trips_X, 8);
+  FS_Trips_X = isNumberic(eepromString) ? eepromString.toInt() : FS_Trips_X;
+  MSGOutput("FS_Trips_X: " + String(FS_Trips_X));
+
+  eepromString = ReadInfoEEPROM(EP_FS_Trips_Y, 8);
+  FS_Trips_Y = isNumberic(eepromString) ? eepromString.toInt() : FS_Trips_Y;
+  MSGOutput("FS_Trips_Y: " + String(FS_Trips_Y));
+
+  eepromString = ReadInfoEEPROM(EP_FS_Trips_Z, 8);
+  FS_Trips_Z = isNumberic(eepromString) ? eepromString.toInt() : FS_Trips_Z;
+  MSGOutput("FS_Trips_Z: " + String(FS_Trips_Z));
+
+  eepromString = ReadInfoEEPROM(EP_FS_GradientTarget_X, 8);
+  FS_GradientTarget_X = isNumberic(eepromString) ? eepromString.toDouble() : FS_GradientTarget_X;
+  MSGOutput("FS_GradientTarget_X: " + String(FS_GradientTarget_X));
+
+  eepromString = ReadInfoEEPROM(EP_FS_GradientTarget_Y, 8);
+  FS_GradientTarget_Y = isNumberic(eepromString) ? eepromString.toDouble() : FS_GradientTarget_Y;
+  MSGOutput("FS_GradientTarget_Y: " + String(FS_GradientTarget_Y));
+
+  eepromString = ReadInfoEEPROM(EP_FS_GradientTarget_Z, 8);
+  FS_GradientTarget_Z = isNumberic(eepromString) ? eepromString.toDouble() : FS_GradientTarget_Z;
+  MSGOutput("FS_GradientTarget_Z: " + String(FS_GradientTarget_Z));
+
+  eepromString = ReadInfoEEPROM(EP_AA_ScanRough_Feed_Steps_Z_A, 8);
+  AA_ScanRough_Feed_Steps_Z_A = isNumberic(eepromString) ? eepromString.toInt() : AA_ScanRough_Feed_Steps_Z_A;
+  MSGOutput("AA_ScanRough_Feed_Steps_Z_A: " + String(AA_ScanRough_Feed_Steps_Z_A));
+
+  eepromString = ReadInfoEEPROM(EP_AA_ScanRough_Feed_Steps_Z_B, 8);
+  AA_ScanRough_Feed_Steps_Z_B = isNumberic(eepromString) ? eepromString.toInt() : AA_ScanRough_Feed_Steps_Z_B;
+  MSGOutput("AA_ScanRough_Feed_Steps_Z_B: " + String(AA_ScanRough_Feed_Steps_Z_B));
+
+  eepromString = ReadInfoEEPROM(EP_AA_ScanRough_Feed_Ratio_Z_A, 8);
+  AA_ScanRough_Feed_Ratio_Z_A = isNumberic(eepromString) ? eepromString.toDouble() : AA_ScanRough_Feed_Ratio_Z_A;
+  MSGOutput("AA_ScanRough_Feed_Ratio_Z_A: " + String(AA_ScanRough_Feed_Ratio_Z_A));
+
+  eepromString = ReadInfoEEPROM(EP_AA_ScanRough_Feed_Ratio_Z_B, 8);
+  AA_ScanRough_Feed_Ratio_Z_B = isNumberic(eepromString) ? eepromString.toDouble() : AA_ScanRough_Feed_Ratio_Z_B;
+  MSGOutput("AA_ScanRough_Feed_Ratio_Z_B: " + String(AA_ScanRough_Feed_Ratio_Z_B));
+
+  eepromString = ReadInfoEEPROM(EP_AA_ScanRough_Feed_Ratio_Z_C, 8);
+  AA_ScanRough_Feed_Ratio_Z_C = isNumberic(eepromString) ? eepromString.toDouble() : AA_ScanRough_Feed_Ratio_Z_C;
+  MSGOutput("AA_ScanRough_Feed_Ratio_Z_C: " + String(AA_ScanRough_Feed_Ratio_Z_C));
+
+  eepromString = ReadInfoEEPROM(EP_AA_ScanRough_Feed_Ratio_Z_D, 8);
+  AA_ScanRough_Feed_Ratio_Z_D = isNumberic(eepromString) ? eepromString.toDouble() : AA_ScanRough_Feed_Ratio_Z_D;
+  MSGOutput("AA_ScanRough_Feed_Ratio_Z_D: " + String(AA_ScanRough_Feed_Ratio_Z_D));
+
+#pragma endregion
+
+  isWiFiConnected = true;
+  isCheckingServer = true;
+  DataSent_Server("ID?");
+  Serial.println("isServerConnected:" + String(isWiFiConnected));
+  isCheckingServer = false;
+
+  nowMillis_DataRec = millis();
+
+  // Check Server is connected
+  if(Station_Type == 0)
+  {
+    // 在core 0啟動 Task_1_sendData (接收遙控盒訊息)
+    xTaskCreatePinnedToCore(
+        Task_1_sendData, /* 任務實際對應的Function */
+        "Task_1",        /* 任務名稱 */
+        10000,           /* 堆疊空間 */
+        NULL,            /* 無輸入值 */
+        12,              /* 優先序0(0為最低) */
+        &Task_1,         /* 對應的任務變數位址 */
+        0);              /*指定在核心0執行 */
+  }
+  else if (Station_Type == 3)
+  {
+    if(IsDirtReverse_X == 1)
+  {
+    X_DIR_True = false;
+    X_DIR_False = true;
+  }
+
+  if(IsDirtReverse_Y == 1)
+  {
+    Y_DIR_True = false;
+    Y_DIR_False = true;
+  }
+ 
+  if(IsDirtReverse_Z == 1)
+  {
+    Z_DIR_True = false;
+    Z_DIR_False = true;
+  }
+    disableCore0WDT();  //Disable watch dog
+    // 在core 0啟動 Task_2_sendData (接收遙控盒訊息)
+    xTaskCreatePinnedToCore(
+        Task_1_Encoder, /* 任務實際對應的Function */
+        "Task_1",        /* 任務名稱 */
+        10000,           /* 堆疊空間 */
+        NULL,            /* 無輸入值 */
+        12,              /* 優先序0(0為最低) */
+        &Task_1,         /* 對應的任務變數位址 */
+        0);              /*指定在核心0執行 */
+  }
+
+  
+  motorType = Phase_5;
+  if (motorType == HomeMade)
+    isTrip3Jump = false;
+
+  DataOutput(false);
+}
+
+bool isMsgShow = false;
+unsigned long previousMillis = 0;
+const long interval = 100; // default:2000
+String Data;
+
+String ServerIP = "http://192.168.4.1/";
+const char *serverTestData = "http://192.168.4.1/?param1=10&param2=hi";
+
+int LoopCount = 0;
+
+void loop()
+{
+  unsigned long currentMillis = millis();
+
+  if (currentMillis - previousMillis >= interval)
+  {
+    LoopCount++;
+    previousMillis = currentMillis;
+
+    // Re-Initialize
+    isStop = false;
+    ButtonSelected = -1;
+
+    // Keyboard Detect
+    //  ButtonSelected = KeyValueConverter();
+    if (ButtonSelected != -1)
+      Motor_Continous_Mode = 1;
+
+    String cmd = "";
+    String rsMsg = "";
+    if (Serial.available())
+    {
+      rsMsg = Serial.readString();
+      cmd = rsMsg;
+      if (cmd != "")
+        Motor_Continous_Mode = 2;
+    }
+
+    if (cmd_from_contr != "")
+    {
+      cmd = cmd_from_contr;
+
+      if (cmd_value_from_contr != "")
+      {
+        int valueContr = cmd_value_from_contr.toDouble();
+
+        if (!isStop)
+        {
+          Serial.print("msg:" + cmd_from_contr);
+          Serial.println(", value:" + cmd_value_from_contr);
+        }
+
+        // Motor move cmd from controller
+        if (cmd == "BS")
+        {
+          ButtonSelected = valueContr;
+          Motor_Continous_Mode = 3;
+        }
+      }
+    }
+
+    cmd_No = Function_Classification(cmd, ButtonSelected);
+
+    cmd_No = Function_Excecutation(cmd, cmd_No);
+
+    // isGetPower
+    if (isGetPower && (LoopCount >= 5) && cmd_No <= 100)
+    {
+      LoopCount = 0;
+      if (true)
+      {
+        double value;
+
+        switch (GetPower_Mode)
+        {
+        case 1:
+          value = Cal_PD_Input_IL(Get_PD_Points);
+          break;
+
+        case 2:
+          value = Cal_PD_Input_Dac(Get_PD_Points);
+          break;
+
+        case 3:
+          value = Cal_PD_Input_Row_IL(Get_PD_Points);
+          break;
+
+        case 4:
+          value = Cal_PD_Input_Row_Dac(Get_PD_Points);
+          break;
+
+        default:
+          break;
+        }
+
+        MSGOutput("PD_Power:" + String(value));       // dB
+        DataSent_Server("PD_Power:" + String(value)); // Send to Server and check is connected or not !!
+      }
+    }
+
+    cmd_from_contr = "";
+    cmd_value_from_contr = "";
+  }
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -1805,9 +2008,9 @@ void AutoAlign()
 {
   StopValue = Target_IL;
 
-  if (Station_Type == 0)
+  if (Station_Type == 0)  //CTF
     Move_Motor(Z_DIR_Pin, Z_STP_Pin, false, AA_SpiralRough_Feed_Steps_Z_A * MotorStepRatio, 12 * MotorStepDelayRatio, 150); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
-  else if (Station_Type == 1 || Station_Type == 2)
+  else 
     Move_Motor(Z_DIR_Pin, Z_STP_Pin, false, AA_SpiralRough_Feed_Steps_Z_A / 6 * MotorStepRatio, 12 * MotorStepDelayRatio, 150); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
 
   unsigned long time1 = 0, time2 = 0, time3 = 0, time4 = 0, time5 = 0, time6 = 0, time7 = 0;
@@ -4372,7 +4575,9 @@ int Function_Classification(String cmd, int ButtonSelected)
     //(CScan) Scan Twoway Command
     else if (Contains(cmd, "CScan_"))
     {
-      cmd.remove(0, 6);
+      cmd = ExtractCmd(cmd, "CScan_");
+
+      // cmd.remove(0, 6);
       Serial.println(cmd);
 
       int XYZ;
@@ -4446,7 +4651,9 @@ int Function_Classification(String cmd, int ButtonSelected)
     //(SScan) Spiral Scan Command
     else if (Contains(cmd, "SScan_"))
     {
-      cmd.remove(0, 6);
+      cmd = ExtractCmd(cmd, "SScan_");
+
+      // cmd.remove(0, 6);
       Serial.println(cmd);
 
       int matrix;
@@ -4528,13 +4735,7 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Set auto-align / auto-curing Parameter
     else if (Contains(cmd, "Set::"))
     {
-      // Serial.print("Row Cmd: ");
-      // Serial.println(cmd);
-
       int indexOffSet = cmd.indexOf("Set::");
-
-      // Serial.print("Index: ");
-      // Serial.println(String(indexOffSet));
 
       cmd.remove(0, 5 + indexOffSet);
 
@@ -4887,12 +5088,7 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Get IL Command
     else if (cmd == "IL?")
     {
-      // digitalWrite(Tablet_PD_mode_Trigger_Pin, false); // false is PD mode, true is Servo mode
-      // delay(5);
-
       MSGOutput("IL:" + String(Cal_PD_Input_IL(Get_PD_Points)));
-
-      // digitalWrite(Tablet_PD_mode_Trigger_Pin, true); // false is PD mode, true is Servo mode
     }
 
     // Get Ref Command
@@ -4912,19 +5108,21 @@ int Function_Classification(String cmd, int ButtonSelected)
 
     // Set Ref Command
     else if (Contains(cmd, "Set_Ref:"))
-    {
-      cmd.remove(0, 8);
-      cmd.trim();
+    {   
+      cmd = ExtractCmd(cmd, "Set_Ref:");
 
       CleanEEPROM(0, 8);               // Clean EEPROM(int startPosition, int datalength)
       WriteInfoEEPROM(String(cmd), 0); //(data, start_position)  // Write Data to EEPROM
       EEPROM.commit();
 
-      Serial.println("Update Ref Value : " + String(cmd));
+      // Serial.println("Update Ref Value : " + String(cmd));
+      Serial.printf("Update Ref Value : %s\n" , cmd);
 
       String eepromString = ReadInfoEEPROM(0, 8); //(int start_position, int data_length)
 
-      Serial.println("PD ref: " + eepromString); //(start_position, data_length)  // Reading Data from EEPROM
+      Serial.printf("PD ref: %s\n" , eepromString);
+
+      // Serial.println("PD ref: " + eepromString); //(start_position, data_length)  // Reading Data from EEPROM
 
       ref_Dac = eepromString.toDouble();
       ref_IL = ILConverter(ref_Dac);
@@ -4933,8 +5131,9 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Set Target IL
     else if (Contains(cmd, "Set_Target_IL:"))
     {
-      cmd.remove(0, 14);
-      cmd.trim();
+      cmd = ExtractCmd(cmd, "Set_Target_IL:");
+      // cmd.remove(0, 14);
+      // cmd.trim();
       Target_IL = WR_EEPROM(72, cmd).toDouble();
       MSGOutput("Set_Target_IL:" + String(Target_IL));
     }
@@ -4942,8 +5141,9 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Set Motor Step Ratio
     else if (Contains(cmd, "Set_MotorStepRatio:"))
     {
-      cmd.remove(0, 19);
-      cmd.trim();
+      cmd = ExtractCmd(cmd, "Set_MotorStepRatio:");
+      // cmd.remove(0, 19);
+      // cmd.trim();
       MotorStepRatio = WR_EEPROM(208, cmd).toDouble();
       MSGOutput("Set_MotorStepRatio:" + String(MotorStepRatio));
     }
@@ -4951,8 +5151,10 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Set Motor Step Delay Ratio
     else if (Contains(cmd, "Set_MotorStepDelayRatio:"))
     {
-      cmd.remove(0, 24);
-      cmd.trim();
+      cmd = ExtractCmd(cmd, "Set_MotorStepDelayRatio:");
+
+      // cmd.remove(0, 24);
+      // cmd.trim();
       MotorStepDelayRatio = WR_EEPROM(216, cmd).toDouble();
       MSGOutput("Set_MotorStepDelayRatio:" + String(MotorStepDelayRatio));
     }
@@ -4966,23 +5168,25 @@ int Function_Classification(String cmd, int ButtonSelected)
     // //Set Manual Control Motor Speed
     else if (Contains(cmd, "SPD"))
     {
-      cmd.remove(0, 3);
+      cmd = ExtractCmd(cmd, "SPD");
+
+      // cmd.remove(0, 3);
 
       if (Contains(cmd, "X"))
       {
-        cmd.remove(0, 3); // Include empty char deleted
+        cmd.remove(0, 2); // Include empty char deleted
         delayBetweenStep_X = cmd.toInt();
         WR_EEPROM(48, cmd);
       }
       else if (Contains(cmd, "Y"))
       {
-        cmd.remove(0, 3); // Include empty char deleted
+        cmd.remove(0, 2); // Include empty char deleted
         delayBetweenStep_Y = cmd.toInt();
         WR_EEPROM(56, cmd);
       }
       else if (Contains(cmd, "Z"))
       {
-        cmd.remove(0, 3); // Include empty char deleted
+        cmd.remove(0, 2); // Include empty char deleted
         delayBetweenStep_Z = cmd.toInt();
         WR_EEPROM(64, cmd);
       }
@@ -5007,7 +5211,8 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Set Manual Control Motor Speed
     else if (Contains(cmd, "Set_Motor_Speed_"))
     {
-      cmd.remove(0, 16);
+      cmd = ExtractCmd(cmd, "Set_Motor_Speed_");
+      // cmd.remove(0, 16);
 
       if (Contains(cmd, "X"))
       {
@@ -5034,11 +5239,130 @@ int Function_Classification(String cmd, int ButtonSelected)
       MSGOutput("Set Motor Speed:" + cmd);
     }
 
+    // Set Manual-Encoder Control Motor Speed
+    else if (Contains(cmd, "DIR"))
+    {
+      cmd = ExtractCmd(cmd, "DIR");
+
+      if (Contains(cmd, "X"))
+      {
+        cmd.remove(0, 2); // Include empty char deleted
+        IsDirtReverse_X = cmd.toInt();
+        WR_EEPROM(EP_Motor_DIR_X, cmd);
+      }
+      else if (Contains(cmd, "Y"))
+      {
+        cmd.remove(0, 2); // Include empty char deleted
+        IsDirtReverse_Y = cmd.toInt();
+        WR_EEPROM(EP_Motor_DIR_Y, cmd);
+      }
+      else if (Contains(cmd, "Z"))
+      {
+        cmd.remove(0, 2); // Include empty char deleted
+        IsDirtReverse_Z = cmd.toInt();
+        WR_EEPROM(EP_Motor_DIR_Z, cmd);
+      }
+      else if (Contains(cmd, "?"))
+      {
+        Serial.println("DIR (x, y, z): (" + ReadInfoEEPROM(EP_Motor_DIR_X, 8) + "," + ReadInfoEEPROM(EP_Motor_DIR_Y, 8) + "," + ReadInfoEEPROM(EP_Motor_DIR_Z, 8) + ")");
+      }
+      else
+      {
+        int dbt = cmd.toInt();
+        IsDirtReverse_X = dbt;
+        IsDirtReverse_Y = dbt;
+        IsDirtReverse_Z = dbt;
+        WR_EEPROM(EP_Motor_DIR_X, cmd);
+        WR_EEPROM(EP_Motor_DIR_Y, cmd);
+        WR_EEPROM(EP_Motor_DIR_Z, cmd);
+      }
+
+      if(IsDirtReverse_X == 1)
+      {
+        X_DIR_True = false;
+        X_DIR_False = true;
+      }
+      else
+      {
+        X_DIR_True = true;
+        X_DIR_False = false;
+      }
+
+      if(IsDirtReverse_Y == 1)
+      {
+        Y_DIR_True = false;
+        Y_DIR_False = true;
+      }
+      else
+      {
+        Y_DIR_True = true;
+        Y_DIR_False = false;
+      }
+    
+      if(IsDirtReverse_Z == 1)
+      {
+        Z_DIR_True = false;
+        Z_DIR_False = true;
+      }
+      else
+      {
+        Z_DIR_True = true;
+        Z_DIR_False = false;
+      }
+
+      Serial.println("Set Motor DIR:" + cmd);
+    }
+
+    // Set Manual-Encoder Control Motor Step
+    else if (Contains(cmd, "ENC"))
+    {
+      cmd = ExtractCmd(cmd, "ENC");
+
+      // cmd.remove(0, 3);
+
+      if (Contains(cmd, "X"))
+      {
+        cmd.remove(0, 2); // Include empty char deleted
+        Encoder_Motor_Step_X = cmd.toInt();
+        WR_EEPROM(EP_Encoder_Motor_Step_X, cmd);
+      }
+      else if (Contains(cmd, "Y"))
+      {
+        cmd.remove(0, 2); // Include empty char deleted
+        Encoder_Motor_Step_Y = cmd.toInt();
+        WR_EEPROM(EP_Encoder_Motor_Step_Y, cmd);
+      }
+      else if (Contains(cmd, "Z"))
+      {
+        cmd.remove(0, 2); // Include empty char deleted
+        Encoder_Motor_Step_Z = cmd.toInt();
+        WR_EEPROM(EP_Encoder_Motor_Step_Z, cmd);
+      }
+      else if (Contains(cmd, "?"))
+      {
+        Serial.println("ENC (x, y, z): (" + ReadInfoEEPROM(EP_Encoder_Motor_Step_X, 8) + "," + ReadInfoEEPROM(EP_Encoder_Motor_Step_Y, 8) + "," + ReadInfoEEPROM(EP_Encoder_Motor_Step_Z, 8) + ")");
+      }
+      else
+      {
+        int dbt = cmd.toInt();
+        Encoder_Motor_Step_X = dbt;
+        Encoder_Motor_Step_Y = dbt;
+        Encoder_Motor_Step_Z = dbt;
+        WR_EEPROM(EP_Encoder_Motor_Step_X, cmd);
+        WR_EEPROM(EP_Encoder_Motor_Step_Y, cmd);
+        WR_EEPROM(EP_Encoder_Motor_Step_Z, cmd);
+      }
+     
+      Serial.println("Set Motor ENC Step:" + cmd);
+    }
+
     // Set Heater
     else if (Contains(cmd, "Heater::"))
     {
-      cmd.remove(0, 8);
-      cmd.trim();
+      cmd = ExtractCmd(cmd, "Heater::");
+
+      // cmd.remove(0, 8);
+      // cmd.trim();
       int Heater_Idx = cmd.toInt();
 
       if (Heater_Idx == 0)
@@ -5060,8 +5384,10 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Get/Set PD_Ref_Array[15][0]=
     else if (Contains(cmd, "PD_Ref_Array"))
     {
-      cmd.remove(0, 12);
-      cmd.trim();
+      cmd = ExtractCmd(cmd, "PD_Ref_Array");
+
+      // cmd.remove(0, 12);
+      // cmd.trim();
 
       if (Contains(cmd, "]"))
       {
@@ -5112,8 +5438,10 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Set PD average points
     else if (Contains(cmd, "Set_PD_average_Points:"))
     {
-      cmd.remove(0, 22);
-      cmd.trim();
+      cmd = ExtractCmd(cmd, "Set_PD_average_Points:");
+
+      // cmd.remove(0, 22);
+      // cmd.trim();
       Get_PD_Points = cmd.toInt();
 
       MSGOutput("Set Get_PD_Points: " + WR_EEPROM(EP_Get_PD_Points, cmd));
@@ -5122,8 +5450,10 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Set Station Type
     else if (Contains(cmd, "Station_Type:"))
     {
-      cmd.remove(0, 13);
-      cmd.trim();
+      cmd = ExtractCmd(cmd, "Station_Type:");
+
+      // cmd.remove(0, 13);
+      // cmd.trim();
       Station_Type = cmd.toInt();
 
       MSGOutput("Set Station_Type: " + WR_EEPROM(EP_Station_Type, cmd));
@@ -5141,8 +5471,10 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Set Board ID
     else if (Contains(cmd, "ID#"))
     {
-      cmd.remove(0, 3);
-      cmd.trim();
+      cmd = ExtractCmd(cmd, "ID#");
+
+      // cmd.remove(0, 3);
+      // cmd.trim();
       ID = cmd;
       MSGOutput("Set Board_ID: " + WR_EEPROM(EP_Board_ID, cmd));
     }
@@ -5156,8 +5488,10 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Set Station ID
     else if (Contains(cmd, "ID_Station#"))
     {
-      cmd.remove(0, 11);
-      cmd.trim();
+      cmd = ExtractCmd(cmd, "ID_Station#");
+
+      // cmd.remove(0, 11);
+      // cmd.trim();
       Station_ID = cmd;
       MSGOutput("Set Station_ID: " + WR_EEPROM(16, cmd));
     }
@@ -5171,7 +5505,9 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Set Server ID
     else if (Contains(cmd, "ID_Server#"))
     {
-      cmd.remove(0, 10);
+      cmd = ExtractCmd(cmd, "ID_Server#");
+
+      // cmd.remove(0, 10);
       MSGOutput("Set Server ID: " + WR_EEPROM(88, 32, cmd));
     }
 
@@ -5182,20 +5518,20 @@ int Function_Classification(String cmd, int ButtonSelected)
     }
 
     // Set Server Password
-    else if (Contains(cmd, "PW_Server#"))
-    {
-      cmd.remove(0, 10);
-      MSGOutput("Set Server Password: " + WR_EEPROM(120, 32, cmd));
-    }
+    // else if (Contains(cmd, "PW_Server#"))
+    // {
+    //   cmd.remove(0, 10);
+    //   MSGOutput("Set Server Password: " + WR_EEPROM(120, 32, cmd));
+    // }
 
     // Get Server Password
-    else if (cmd == "PW_Server?")
-    {
-      MSGOutput(ReadInfoEEPROM(120, 32));
-    }
+    // else if (cmd == "PW_Server?")
+    // {
+    //   MSGOutput(ReadInfoEEPROM(120, 32));
+    // }
 
     // Re-start esp32
-    else if (cmd == "ESP_RST")
+    else if (Contains(cmd, "ESP_RST"))
     {
       MSGOutput("ESP_Reset");
       ESP.restart();
@@ -5204,7 +5540,9 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Clena EEPROM : Start position (default length = 8)
     else if (Contains(cmd, "Clean_EEPROM:"))
     {
-      cmd.remove(0, 13);
+      cmd = ExtractCmd(cmd, "Clean_EEPROM:");
+
+      // cmd.remove(0, 13);
       CleanEEPROM(cmd.toInt(), 8);
       WR_EEPROM(cmd.toInt(), "");
       EEPROM.commit();
@@ -5340,7 +5678,9 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Command No.
     else if (Contains(cmd, "cmd"))
     {
-      cmd.remove(0, 3);
+      cmd = ExtractCmd(cmd, "cmd");
+
+      // cmd.remove(0, 3);
       cmd_No = cmd.toInt();
       delay(10);
     }
@@ -5878,7 +6218,7 @@ int Function_Excecutation(String cmd, int cmd_No)
 #pragma region Q Scan Z
                     if (PD_Now < (AutoCuring_Best_IL - Acceptable_Delta_IL) || forcedAlign)
                     {
-                      //-----------------------------------------------------------Q Scan Z
+                      //-----------------------------------------------------------Q Scan Z2
 
                       DataSent_Controller("Scan");
 
@@ -5966,7 +6306,8 @@ int Function_Excecutation(String cmd, int cmd_No)
 
           MSGOutput("Auto Q End");
 
-          if (Station_Type == 0)
+          //Only CTF station has control panel
+          if (Station_Type == 0)  
           {
             DataSent_Controller("Menu");
 
@@ -6147,6 +6488,10 @@ int Function_Excecutation(String cmd, int cmd_No)
 
     // Functions: Motion
     if (cmd_No > 100)
+    {
+      // vTaskSuspend(Task_1); // 傳入 NULL 表示暫停Task
+      // delay(50);
+      // isMotorCont = true;
 
       switch (cmd_No)
       {
@@ -6465,6 +6810,9 @@ int Function_Excecutation(String cmd, int cmd_No)
         break;
       }
 
+      // vTaskResume(Task_1); // 回復 Task 1 的執行
+      // isMotorCont = false;
+    }
     cmd_from_contr = "";
     cmd_value_from_contr = "";
   }
@@ -6497,14 +6845,29 @@ bool Motor_Feed_Mode_StopJudge()
 
 //------------------------------------------------------------------------------------------------------------------------------
 
+/// @brief 判斷是否收到緊急停止訊息
 void CheckStop()
 {
   if (Serial.available())
   {
     String cmd = Serial.readString();
+    
     cmd_No = Function_Classification(cmd, ButtonSelected);
     if (cmd_No == 30)
       EmergencyStop();
+    else
+    {
+      cmd.replace("\r", "");
+      cmd.replace("\n", "");
+      cmd.trim();
+
+      if (cmd == "0")  //馬達停止連續移動指令
+      {
+        isStop = true;
+        Serial.println("Command 0");
+      }
+    }
+
     cmd = ""; // Reset command from serial port
   }
 }
