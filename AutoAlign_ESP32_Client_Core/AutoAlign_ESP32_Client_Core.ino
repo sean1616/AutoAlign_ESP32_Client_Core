@@ -34,6 +34,7 @@ int ButtonSelected = 0;
 const byte Heater_Start_Pin = 12;
 const byte Heater_Stop_Pin = 14;
 
+// pin = 13
 int Tablet_PD_mode_Trigger_Pin = 13;
 
 Adafruit_ADS1115 ads;
@@ -312,6 +313,19 @@ bool isTrip3Jump = true; // If station is high resolution , this value could be 
 
 bool isWatchDog_Flag = false;
 bool isLCD_Auto_Update = false;
+
+enum SpiralType
+{
+  rectangular,
+  smooth
+};
+
+enum SpiralPlane
+{
+  XY,
+  YZ,
+  XZ
+};
 
 void step(byte stepperPin, long steps, int delayTime)
 {
@@ -1086,7 +1100,8 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT = 10)
   if (Delta_Z != 0)
     digitalWrite(Z_DIR_Pin, MotorCC_Z);
 
-  delay(3);
+  // delayMicroseconds(300);
+  // delay(3);
 
   // 計算分時時間
   byte MoveAxisCount = 0;
@@ -1185,36 +1200,19 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT = 10)
 
     delayMicroseconds(DelayT);
 
-    // if (Delay < MinDelay)
-    //   MinDelay = Delay;
-
     Count_Step++;
     if (Count_Step > ratio_max)
       Count_Step = Count_Step % ratio_max;
   }
 
-  // MSGOutput("Delta:");
-  // MSGOutput(String(Delta_X));
-  // MSGOutput(String(Delta_Y));
-  // MSGOutput(String(Delta_Z));
-
   // // Position Record
   Pos_Now.X = TargetPos.X;
   Pos_Now.Y = TargetPos.Y;
   Pos_Now.Z = TargetPos.Z;
-
-  // MSGOutput("Min Delay :" + String(MinDelay));
 }
 
-void Move_Motor_abs_all(int x, int y, int z, int DelayT = 10)
+void Move_Motor_abs_all(int x, int y, int z, int DelayT = 6)
 {
-  // Separate move axis
-  //  Move_Motor_abs(0, x);
-  //  Move_Motor_abs(1, y);
-  //  Move_Motor_abs(2, z);
-
-  // MSGOutput("Abs All Sync");
-
   struct_Motor_Pos TargetPos;
   TargetPos.X = x;
   TargetPos.Y = y;
@@ -1825,14 +1823,14 @@ void setup()
   DataOutput(false);
 }
 
-bool isMsgShow = false;
+// bool isMsgShow = false;
 unsigned long previousMillis = 0;
-const long interval = 100; // default:2000
-String Data;
+const long interval = 100; // default:100
+// String Data;
+// String ServerIP = "http://192.168.4.1/";
+// const char *serverTestData = "http://192.168.4.1/?param1=10&param2=hi";
 
-String ServerIP = "http://192.168.4.1/";
-const char *serverTestData = "http://192.168.4.1/?param1=10&param2=hi";
-
+String Txt_SpiralSetting = "";
 int LoopCount = 0;
 
 void loop()
@@ -1843,7 +1841,7 @@ void loop()
   if (currentMillis - previousMillis >= interval)
   {
     LoopCount++;
-    // previousMillis = currentMillis;
+    previousMillis = currentMillis;
 
     // Re-Initialize
     isStop = false;
@@ -2710,19 +2708,18 @@ double AutoAlign_Result[3] = {0, 0, 0};
 bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
 {
 #pragma region Initialization
-  // delay(25);
   CMDOutput("ST" + String(MinMotroStep));
   Serial.println("StopValue:" + String(StopValue));
   Serial.println("stableDelay:" + String(stableDelay));
   MSGOutput("Spiral Step:" + String(MinMotroStep));
 
-  // DataOutput(false);
+  MSGOutput("Position:" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z));
 
   double ts = 0;
   unsigned long timer_1 = 0, timer_2 = 0;
   timer_1 = millis();
 
-  double PD_BestIL = -100, PD_Now = -100;
+  double PD_BestIL = -100;
   int PD_BestIL_Position[2];
   int PD_Best_Pos_Abs[2];
 
@@ -2769,7 +2766,7 @@ bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
     if (isStop)
       return false;
 
-    CMDOutput("ML");
+    CMDOutput("ML", false);
     Serial.println("Matrix Layers: " + String(n));
 
     if (n > m)
@@ -4811,86 +4808,10 @@ int Function_Classification(String cmd, int ButtonSelected)
     {
       cmd = ExtractCmd(cmd, "SScan_");
 
-      // cmd.remove(0, 6);
-      Serial.println(cmd);
+      Txt_SpiralSetting = cmd;
+      Serial.println(Txt_SpiralSetting);
 
-      int matrix;
-      int motorStep;
-      int stableDelay;
-      int delay_btw_steps;
-      int StopPDValue;
-      int Z_Layers;
-      int Z_Steps;
-
-      matrix = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd.substring(0, cmd.indexOf('_'))); // matrix
-      cmd.remove(0, cmd.indexOf('_') + 1);
-
-      motorStep = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd.substring(0, cmd.indexOf('_'))); // step
-      cmd.remove(0, cmd.indexOf('_') + 1);
-
-      stableDelay = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(String(stableDelay)); // stable delay
-      cmd.remove(0, cmd.indexOf('_') + 1);
-
-      delay_btw_steps = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd.substring(0, cmd.indexOf('_'))); // delay_btw_steps
-      cmd.remove(0, cmd.indexOf('_') + 1);
-
-      StopPDValue = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd.substring(0, cmd.indexOf('_'))); // stopValue
-      cmd.remove(0, cmd.indexOf('_') + 1);
-
-      Z_Layers = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd.substring(0, cmd.indexOf('_'))); // Z_Layers
-      cmd.remove(0, cmd.indexOf('_') + 1);
-
-      Z_Steps = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd); // Z_Steps
-
-      digitalWrite(Tablet_PD_mode_Trigger_Pin, false); // false is PD mode, true is Servo mode
-      delay(5);
-
-      M_Level = matrix;
-
-      CMDOutput("AS");
-      Serial.println("Auto-Align Start");
-      CMDOutput("^X");
-      CMDOutput("R:" + String(M_Level * 2 + 1));
-      CMDOutput("C:" + String(M_Level * 2 + 1));
-      // Serial.println("Rows=" + String(M_Level * 2 + 1));
-      // Serial.println("Columns=" + String(M_Level * 2 + 1));
-      // Serial.println("^X");
-
-      MinMotroStep = motorStep * MotorStepRatio; // 350
-      delayBetweenStep = delay_btw_steps;
-
-      if (Z_Layers > 1)
-        sprial_JumpToBest = false;
-
-      isCheckStop = true;
-
-      for (int ZL = 0; ZL < Z_Layers; ZL++)
-      {
-        if (ZL > 0)
-        {
-          Move_Motor(Z_DIR_Pin, Z_STP_Pin, false, Z_Steps, 8, 150); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
-        }
-
-        AutoAlign_Spiral(M_Level, StopPDValue, stableDelay); // Input : (Sprial Level, Threshold, stable) Threshold:128
-      }
-
-      isCheckStop = false;
-
-      sprial_JumpToBest = true;
-
-      CMDOutput("X^");
-      // Serial.println("X^");
-
-      digitalWrite(Tablet_PD_mode_Trigger_Pin, true); // false is PD mode, true is Servo mode
-
-      return 0;
+      return 199;
     }
 
     // Set auto-align / auto-curing Parameter
@@ -6958,78 +6879,277 @@ int Function_Excecutation(String cmd, int cmd_No)
         Move_Motor_abs_all(0, 0, 0);
         break;
 
-      // Circle Test
+      // Circle Spiral Test
       case 199:
 
-        MSGOutput("Spiral Start");
+        int loops = 3;
+        int motorStep = 50;
+        int stableDelay = 0;
+        int delay_btw_steps = 10;
+        int StopPDValue = 2000;
+        int Z_Layers = 1;
+        int Z_Steps = 100;
 
-        long R = 40;
+        SpiralType spiType = rectangular;
+        SpiralPlane spiPlane = YZ;
+        int AngleSteps = 5;
+        double ScanTilt_X = 0;
+        double ScanTilt_Y = 0;
+        double ScanTilt_Z = 0;
 
-        struct_Motor_Pos OriginalPos;
-        OriginalPos.X = Pos_Now.X;
-        OriginalPos.Y = Pos_Now.Y;
-        OriginalPos.Z = Pos_Now.Z;
+// Data analyze from txtcmd
+#pragma region
+        loops = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toInt();
+        Serial.println("loops:" + Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_'))); // loops
+        Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
 
-        // Initial Pos
-        Move_Motor(X_DIR_Pin, X_STP_Pin, true, R, 20, 100);
+        motorStep = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toInt();
+        Serial.println("steps:" + Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_'))); // steps
+        Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
 
-        BLA::Matrix<3, 1> M_A;
-        BLA::Matrix<3, 3> M_B;
-        BLA::Matrix<3, 3> M_C;
+        stableDelay = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toInt();
+        Serial.println("stable delay:" + String(stableDelay)); // stable delay
+        Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
 
-        R = 10200;
-        // double ty = 30 * (PI / 180.0); // 30 degree to radius
-        double ty = 1;
-        double tx = 0 * (PI / 180.0); // 30 degree to radius
+        delay_btw_steps = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toInt();
+        Serial.println("delay_btw_puls:" + Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_'))); // delay_btw_puls
+        Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
 
-        M_B = {cos(ty), 0, sin(ty), 0, 1, 0, -sin(ty), 0, cos(ty)}; // Rotation Matrix on Y axis
-        M_C = {1, 0, 0, 0, cos(tx), -sin(tx), 0, sin(tx), cos(tx)}; // Rotation Matrix on X axis
+        StopPDValue = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toInt();
+        Serial.println("stopValue:" + Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_'))); // stopValue
+        Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
 
-        for (size_t i = 1; i <= 1440; i++)
+        Z_Layers = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toInt();
+        Serial.println("Z_Layers:" + Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_'))); // Z_Layers
+        Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
+
+        Z_Steps = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toInt();
+        Serial.println("Z_Steps:" + Txt_SpiralSetting); // Z_Steps
+        Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
+
+        if (Txt_SpiralSetting != "")
         {
+          int stp = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toInt();
+          Serial.println("spiral type:" + Txt_SpiralSetting); // spiral type
+          Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
 
+          if (stp == 0)
+            spiType = rectangular;
+          else if (stp == 1)
+            spiType = smooth;
+          else
+            spiType = rectangular; // 預設方法
+        }
+
+        if (Txt_SpiralSetting != "")
+        {
+          String sprPlane = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_'));
+          Serial.println("spiral plane:" + Txt_SpiralSetting); // spiral type
+          Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
+
+          if (sprPlane == "XY")
+            spiPlane = XY;
+          else if (sprPlane == "YZ")
+            spiPlane = YZ;
+          else if (sprPlane == "XZ")
+            spiPlane = XZ;
+          else
+            spiPlane = XY; // 預設平面
+        }
+
+        if (Txt_SpiralSetting != "")
+        {
+          AngleSteps = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toInt();
+          Serial.println("spiral angle gap:" + Txt_SpiralSetting);
+          Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
+        }
+
+        if (Txt_SpiralSetting != "")
+        {
+          ScanTilt_X = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toDouble();
+          Serial.println("spiral scan tilt x:" + Txt_SpiralSetting);
+          Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
+        }
+
+        if (Txt_SpiralSetting != "")
+        {
+          ScanTilt_Y = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toDouble();
+          Serial.println("spiral scan tilt y:" + Txt_SpiralSetting);
+          Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
+        }
+
+        if (Txt_SpiralSetting != "")
+        {
+          ScanTilt_Z = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toDouble();
+          Serial.println("spiral scan tilt z:" + Txt_SpiralSetting);
+          Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
+        }
+
+        Txt_SpiralSetting = "";
+
+#pragma endregion
+
+        digitalWrite(Tablet_PD_mode_Trigger_Pin, false); // false is PD mode, true is Servo mode
+        delay(5);
+
+#pragma region Rectangular Spiral
+
+        if (spiType == rectangular)
+        {
+          M_Level = loops;
+
+          CMDOutput("AS");
+          Serial.println("Auto-Align Start");
+          CMDOutput("^X");
+          CMDOutput("R:" + String(M_Level * 2 + 1));
+          CMDOutput("C:" + String(M_Level * 2 + 1));
+
+          MinMotroStep = motorStep * MotorStepRatio; // 350
+          delayBetweenStep = delay_btw_steps;
+
+          if (Z_Layers > 1)
+            sprial_JumpToBest = false;
+
+          // isCheckStop = true;
+
+          for (int ZL = 0; ZL < Z_Layers; ZL++)
           {
-            // R += 80;
-            long Targ_X = 0;
-            // long Targ_X = R * (cos(i * (PI / 180.0)) + OriginalPos.X);
-            long Targ_Y = R * (sin(i * (PI / 180.0)) + OriginalPos.Y);
-            long Targ_Z = R * (sin(i * (PI / 180.0)) + OriginalPos.Z);
+            if (ZL > 0)
+            {
+              Move_Motor(Z_DIR_Pin, Z_STP_Pin, false, Z_Steps, 8, 150); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
+            }
 
-            M_A = {Targ_X, Targ_Y, Targ_Z};
+            AutoAlign_Spiral(M_Level, StopPDValue, stableDelay); // Input : (Sprial Level, Threshold, stable) Threshold:128
+          }
 
-            //  BLA::Matrix<3, 3> A;
-            //  A = {3.25, 5.67, 8.67, 4.55, 7.23, 9.00, 2.35, 5.73, 10.56};
+          // isCheckStop = false;
 
-            //   BLA::Matrix<3, 3> B = {6.54, 3.66, 2.95, 3.22, 7.54, 5.12, 8.98, 9.99, 1.56};
+          sprial_JumpToBest = true;
 
-            //   BLA::Matrix<3, 3> C = A * B;
+          CMDOutput("X^");
+          // Serial.println("X^");
 
-            BLA::Matrix<3, 1> M = M_C * M_B * M_A;
+          return 0;
+        }
 
-            Targ_X = M(0);
-            Targ_Y = M(1);
-            Targ_Z = M(2);
+#pragma endregion
 
-            Move_Motor_abs_all(Targ_X, Targ_Y, Targ_Z, 3);
+#pragma region Smooth Spiral
 
-            if (i % 90 == 0)
-              MSGOutput("Ang:" + String(i) + ", Pos:" + String(Targ_X) + "," + String(Targ_Y) + "," + String(Targ_Z));
+        if (spiType == smooth)
+        {
+          CMDOutput("AS"); // 清除UI前一筆資訊
+          MSGOutput("Spiral Start");
+          CMDOutput("^X"); // 2D scan start msg for UI
+
+          long R = 40;
+
+          struct_Motor_Pos OriginalPos;
+          OriginalPos.X = Pos_Now.X;
+          OriginalPos.Y = Pos_Now.Y;
+          OriginalPos.Z = Pos_Now.Z;
+
+          struct_Motor_Pos BestPos;
+          BestPos.X = Pos_Now.X;
+          BestPos.Y = Pos_Now.Y;
+          BestPos.Z = Pos_Now.Z;
+
+          double BestIL = -80;
+
+          // Initial Pos
+          // Move_Motor(X_DIR_Pin, X_STP_Pin, true, R, 20, 100);
+
+          // Rotation Matrix
+          BLA::Matrix<3, 1> M_A;
+          BLA::Matrix<3, 3> M_X;
+          BLA::Matrix<3, 3> M_Y;
+          BLA::Matrix<3, 3> M_Z;
+
+          R = 0; // initial R
+          double tx = ScanTilt_X * (PI / 180.0);
+          double ty = ScanTilt_Y * (PI / 180.0);
+          double tz = ScanTilt_Z * (PI / 180.0);
+
+          M_X = {1, 0, 0, 0, cos(tx), -sin(tx), 0, sin(tx), cos(tx)}; // Rotation Matrix on X axis
+          M_Y = {cos(ty), 0, sin(ty), 0, 1, 0, -sin(ty), 0, cos(ty)}; // Rotation Matrix on Y axis
+          M_Z = {cos(tz), -sin(tz), 0, sin(tz), cos(tz), 0, 0, 0, 1};
+
+          for (int i = 0; i <= (loops * 360); i = i + AngleSteps)
+          {
+
+            {
+              long Targ_X = OriginalPos.X;
+              long Targ_Y = OriginalPos.Y;
+              long Targ_Z = OriginalPos.Z;
+              // long Targ_X = R * (cos(i * (PI / 180.0)) + OriginalPos.X);
+              // long Targ_Y = R * (cos(i * (PI / 180.0))) + OriginalPos.Y;
+              // long Targ_Z = R * (sin(i * (PI / 180.0))) + OriginalPos.Z;
+
+              if (spiPlane == XY)
+              {
+                Targ_X = R * (sin(i * (PI / 180.0))) + Targ_X;
+                Targ_Y = R * (cos(i * (PI / 180.0))) + Targ_Y;
+              }
+              else if (spiPlane == YZ)
+              {
+                Targ_Y = R * (cos(i * (PI / 180.0))) + Targ_Y;
+                Targ_Z = R * (sin(i * (PI / 180.0))) + Targ_Z;
+              }
+              else if (spiPlane == XZ)
+              {
+                Targ_X = R * (cos(i * (PI / 180.0))) + Targ_X;
+                Targ_Z = R * (sin(i * (PI / 180.0))) + Targ_Z;
+              }
+
+              M_A = {Targ_X, Targ_Y, Targ_Z};
+
+              BLA::Matrix<3, 1> M = M_X * M_Y * M_Z * M_A;
+
+              Targ_X = M(0);
+              Targ_Y = M(1);
+              Targ_Z = M(2);
+
+              Move_Motor_abs_all(Targ_X, Targ_Y, Targ_Z, delay_btw_steps);
+
+              if (stableDelay > 0)
+                delay(stableDelay);
+
+              PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+
+              if (PD_Now > BestIL)
+              {
+                BestIL = PD_Now;
+                BestPos.X = Pos_Now.X;
+                BestPos.Y = Pos_Now.Y;
+                BestPos.Z = Pos_Now.Z;
+              }
+
+              if (i % 20 == 0)
+              {
+                CMDOutput("*[" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + "]=" + PD_Now);
+                // MSGOutput("Ang:" + String(i) + ", Pos:" + String(Targ_X) + "," + String(Targ_Y) + "," + String(Targ_Z));
+              }
+
+              R += motorStep;
+            }
 
             if (isStop)
               break;
           }
 
-          if (isStop)
-            break;
+          // Back to center position
+          Move_Motor_abs_all(BestPos.X, BestPos.Y, BestPos.Z);
+
+          DataOutput(false);
+
+          MSGOutput("Spiral End");
+
+          digitalWrite(Tablet_PD_mode_Trigger_Pin, true); // false is PD mode, true is Servo mode
+
+          return 0;
         }
 
-        // Back to ori
-        Move_Motor_abs_all(0, 0, 0);
-        DataOutput(false);
-
-        MSGOutput("Spiral End");
-
-        return 0;
+#pragma endregion
 
         break;
       }
@@ -7149,15 +7269,7 @@ void DataOutput(bool isIL)
   }
   else
   {
-    // delay(20); // 一定要delay，可避免記憶體存取衝突
-    // long P1 = X_Pos_Now;
-    // long P2 = Y_Pos_Now;
-    // long P3 = Z_Pos_Now;
-    // MSGOutput("Position :" + String(P1) + "," + String(P2) + "," + String(P3));
-    MSGOutput("Position:" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z));
-    // MSGOutput("PP:");
-    // MSGOutput("Position:" + String(Pos_Now.Y));
-    // MSGOutput("Position:" + String(Pos_Now.Z));
+    MSGOutput("Position :" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z));
   }
 }
 
