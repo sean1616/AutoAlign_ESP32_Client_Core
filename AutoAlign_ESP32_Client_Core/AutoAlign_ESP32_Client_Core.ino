@@ -1831,6 +1831,7 @@ const long interval = 100; // default:100
 // const char *serverTestData = "http://192.168.4.1/?param1=10&param2=hi";
 
 String Txt_SpiralSetting = "";
+String Txt_LineScanSetting = "";
 int LoopCount = 0;
 
 void loop()
@@ -3143,6 +3144,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
     step(STP_Pin, motorStep * count, delayBetweenStep); // First Jump
     delay(250);                                         // Default : 100
     PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+
     DataOutput(PD_Now);
     DataOutput(XYZ, PD_Now); // int xyz, double pdValue
 
@@ -4732,75 +4734,12 @@ int Function_Classification(String cmd, int ButtonSelected)
     {
       cmd = ExtractCmd(cmd, "CScan_");
 
-      // cmd.remove(0, 6);
-      Serial.println(cmd);
+      Txt_LineScanSetting = cmd;
+      Serial.println(Txt_LineScanSetting);
 
-      int XYZ;
-      int count;
-      int motorStep;
-      int stableDelay;
-      bool Direction;
-      int delayBetweenStep;
-      int StopPDValue;
-      int Get_PD_Points;
-      int Trips;
+      return 198;
 
-      XYZ = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd.substring(0, cmd.indexOf('_'))); // xyz
-      cmd.remove(0, cmd.indexOf('_') + 1);
-
-      count = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd.substring(0, cmd.indexOf('_'))); // count
-      cmd.remove(0, cmd.indexOf('_') + 1);
-
-      motorStep = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd.substring(0, cmd.indexOf('_'))); // step
-      cmd.remove(0, cmd.indexOf('_') + 1);
-
-      stableDelay = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd.substring(0, cmd.indexOf('_'))); // stable delay
-      cmd.remove(0, cmd.indexOf('_') + 1);
-
-      Direction = cmd.substring(0, cmd.indexOf('_')) == "1";
-      Serial.println(cmd.substring(0, cmd.indexOf('_'))); // direction
-      cmd.remove(0, cmd.indexOf('_') + 1);
-
-      delayBetweenStep = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd.substring(0, cmd.indexOf('_'))); // delaySteps
-      cmd.remove(0, cmd.indexOf('_') + 1);
-
-      StopPDValue = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd.substring(0, cmd.indexOf('_'))); // stopValue
-      cmd.remove(0, cmd.indexOf('_') + 1);
-
-      Get_PD_Points = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd.substring(0, cmd.indexOf('_'))); // average points
-      cmd.remove(0, cmd.indexOf('_') + 1);
-
-      Trips = cmd.substring(0, cmd.indexOf('_')).toInt();
-      Serial.println(cmd); // trips
-
-      // int delayBetweenStep = 50;
-      String msg = "Manual_Fine_Scan_Trip_";
-
-      bool isOK = true;
-
-      CMDOutput("AS");
-
-      isOK = Scan_AllRange_TwoWay(XYZ, count, motorStep, stableDelay,
-                                  Direction, delayBetweenStep, StopPDValue, Get_PD_Points, Trips, msg);
-
-      CMDOutput("%:");
-
-      if (!isOK)
-      {
-        CMDOutput("AS");
-        Scan_AllRange_TwoWay(XYZ, count, motorStep, stableDelay,
-                             Direction, delayBetweenStep, StopPDValue, Get_PD_Points, Trips, msg);
-        CMDOutput("%:");
-      }
-
-      MSGOutput("Auto_Align_End");
+      // Serial.println(cmd);
     }
 
     //(SScan) Spiral Scan Command
@@ -6879,7 +6818,79 @@ int Function_Excecutation(String cmd, int cmd_No)
         Move_Motor_abs_all(0, 0, 0);
         break;
 
-      // Circle Spiral Test
+      // Line Scan
+      case 198:
+
+        int XYZ;
+        int count;
+        int motorStepC;
+        // int stableDelay;
+        bool Direction;
+        // int delayBetweenStep;
+        int StopValueC;
+        int Get_PD_Points;
+        int Trips;
+
+        XYZ = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')).toInt();
+        Serial.println("XYZ:" + Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_'))); // xyz
+        Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
+
+        count = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')).toInt();
+        Serial.println("count:" + Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_'))); // count
+        Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
+
+        motorStepC = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')).toInt();
+        Serial.println("StopValue:" + Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_'))); // step
+        Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
+
+        stableDelay = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')).toInt();
+        Serial.println("stableDelay:" + Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_'))); // stable delay
+        Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
+
+        Direction = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')) == "1";
+        Serial.println("Direction:" + Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_'))); // direction
+        Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
+
+        delayBetweenStep = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')).toInt();
+        Serial.println("delayBetweenStep:" + Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_'))); // delaySteps
+        Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
+
+        StopValueC = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')).toInt();
+        Serial.println("StopValue:" + Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_'))); // stopValue
+        Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
+
+        Get_PD_Points = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')).toInt();
+        Serial.println("Get_PD_Points:" + Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_'))); // average points
+        Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
+
+        Trips = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')).toInt();
+        Serial.println("Trips:" + Txt_LineScanSetting); // trips
+        Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
+
+        msg = "Manual_Fine_Scan_Trip_";
+
+        CMDOutput("AS");
+
+        Scan_AllRange_TwoWay(XYZ, count, motorStepC * MotorStepRatio, stableDelay,
+                             Direction, delayBetweenStep, StopValueC, Get_PD_Points, Trips, msg);
+
+        CMDOutput("%:");
+
+        // if (!)
+        // {
+        //   CMDOutput("AS");
+        //   Scan_AllRange_TwoWay(XYZ, count, motorStepC, stableDelay,
+        //                        Direction, delayBetweenStep, StopValueC, Get_PD_Points, Trips, msg);
+        //   CMDOutput("%:");
+        // }
+
+        MSGOutput("Auto_Align_End");
+
+        return 0;
+
+        break;
+
+      // Circle Spiral
       case 199:
 
         int loops = 3;
