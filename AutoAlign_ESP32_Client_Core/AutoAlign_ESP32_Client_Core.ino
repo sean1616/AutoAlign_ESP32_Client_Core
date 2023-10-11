@@ -1211,7 +1211,7 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT = 10)
   Pos_Now.Z = TargetPos.Z;
 }
 
-void Move_Motor_abs_all(int x, int y, int z, int DelayT = 6)
+void Move_Motor_abs_all(long x, long y, long z, int DelayT = 6)
 {
   struct_Motor_Pos TargetPos;
   TargetPos.X = x;
@@ -1362,6 +1362,1935 @@ void Task_1_Encoder(void *pvParameters)
 
     CheckStop();
   }
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+// int tarPZ = Encoder_Motor_Step_X * tan(11.5 * (PI / 180));
+void Task_1_EncoderTilt(void *pvParameters)
+{
+  while (true)
+  {
+    if (isMotorManualCtr)
+    {
+      // Encoder X
+      {
+        aState_X = digitalRead(Enc_X_outputA); // 將outputA的讀取值 設給 aState
+
+        // 條件判斷，當aState 不等於 aLastState時發生
+        if (aState_X != aLastState_X)
+        {
+          MotorCC = MotorCC_X;
+
+          // 條件判斷，當outputB讀取值 不等於 aState時發生
+          if (digitalRead(Enc_X_outputB) != aState_X)
+          {
+            // int tarPX = Pos_Now.X + Encoder_Motor_Step_X;
+
+            // Move_Motor_abs_all(tarPX, Pos_Now.Y, tarPZ, delayBetweenStep_X);
+            Move_Motor(X_DIR_Pin, X_STP_Pin, X_DIR_True, Encoder_Motor_Step_X, delayBetweenStep_X, 0, false, 0);
+            // Move_Motor(Z_DIR_Pin, Z_STP_Pin, X_DIR_False, tarPZ, delayBetweenStep_X, 0, false, 0);
+          }
+
+          else
+          {
+            // int tarPX = Pos_Now.X - En/coder_Motor_Step_X;
+            // int tarPZ = Encoder_Motor_Step_X * tan(11.5 * (PI / 180));
+            // Move_Motor_abs_all(Pos_Now.X - Encoder_Motor_Step_X, Pos_Now.Y, tarPZ, delayBetweenStep_X);
+            Move_Motor(X_DIR_Pin, X_STP_Pin, X_DIR_False, Encoder_Motor_Step_X, delayBetweenStep_X, 0, false, 0);
+            // Move_Motor(Z_DIR_Pin, Z_STP_Pin, X_DIR_True, tarPZ, delayBetweenStep_X, 0, false, 0);
+          }
+        }
+
+        aLastState_X = aState_X; // 將aState 最後的值 設給 aLastState
+      }
+
+      // Encoder Y
+      {
+        aState_Y = digitalRead(Enc_Y_outputA); // 將outputA的讀取值 設給 aState
+
+        MotorCC = MotorCC_Y;
+
+        // 條件判斷，當aState 不等於 aLastState時發生
+        if (aState_Y != aLastState_Y)
+        {
+          // 條件判斷，當outputB讀取值 不等於 aState時發生
+          if (digitalRead(Enc_Y_outputB) != aState_Y)
+          {
+            Move_Motor(Y_DIR_Pin, Y_STP_Pin, Y_DIR_True, Encoder_Motor_Step_Y, delayBetweenStep_Y, 0, false, 0);
+          }
+          else
+          {
+            Move_Motor(Y_DIR_Pin, Y_STP_Pin, Y_DIR_False, Encoder_Motor_Step_Y, delayBetweenStep_Y, 0, false, 0);
+          }
+        }
+
+        aLastState_Y = aState_Y; // 將aState 最後的值 設給 aLastState
+      }
+
+      // Encoder Z
+      {
+        aState_Z = digitalRead(Enc_Z_outputA); // 將outputA的讀取值 設給 aState
+
+        MotorCC = MotorCC_Z;
+
+        // 條件判斷，當aState 不等於 aLastState時發生
+        if (aState_Z != aLastState_Z)
+        {
+          // 條件判斷，當outputB讀取值 不等於 aState時發生
+          if (digitalRead(Enc_Z_outputB) != aState_Z)
+          {
+            Move_Motor(Z_DIR_Pin, Z_STP_Pin, Z_DIR_True, Encoder_Motor_Step_Z, delayBetweenStep_Z, 0, false, 0);
+          }
+          else
+          {
+            Move_Motor(Z_DIR_Pin, Z_STP_Pin, Z_DIR_False, Encoder_Motor_Step_Z, delayBetweenStep_Z, 0, false, 0);
+          }
+        }
+
+        aLastState_Z = aState_Z; // 將aState 最後的值 設給 aLastState
+      }
+    }
+    else
+      delay(50);
+
+    CheckStop();
+  }
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+double maxIL_in_FineScan = 0;
+double minIL_in_FineScan = -100;
+
+bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
+                          bool Direction, int delayBetweenStep, double StopPDValue,
+                          int Get_PD_Points, int Trips, String msg, double slope = 0.001,
+                          double Tilt_X = 0, double Tilt_Y = 0, double Tilt_Z = 0)
+{
+  int DIR_Pin = 0; // 0:X, 1:Y, 2:Z
+  int STP_Pin = 0;
+  int backlash = 0;
+  MotorCC = Direction; // initial direction
+  int trip = 1;
+  int dataCount = 3;
+  int dataCount_ori;
+  int indexofBestIL = 0;
+  double PD_Value[4 * count + 1];
+  long Step_Value[4 * count + 1];
+  double Gradient_IL_Step[4 * count + 1];
+  int GradientDownCount = 0;
+  int GradientCount = 0;
+  bool isGradCountFixGauss = false;
+  double GradientTarget = slope; // default: 0.001
+  unsigned long timer_1 = 0, timer_2 = 0;
+  // delayBetweenStep = stableDelay;
+  timer_1 = millis();
+
+  dataCount = 2 * count + 1;
+  dataCount_ori = dataCount;
+
+  switch (XYZ)
+  {
+  case X_Dir:
+    DIR_Pin = X_DIR_Pin;
+    STP_Pin = X_STP_Pin;
+    backlash = X_backlash;
+    GradientTarget = FS_GradientTarget_X; // 0.003
+    delay(5);
+    break;
+  case Y_Dir:
+    DIR_Pin = Y_DIR_Pin;
+    STP_Pin = Y_STP_Pin;
+    backlash = Y_backlash;
+    GradientTarget = FS_GradientTarget_Y; // 0.002
+    delay(5);
+    break;
+  case Z_Dir:
+    DIR_Pin = Z_DIR_Pin;
+    STP_Pin = Z_STP_Pin;
+    backlash = Z_backlash;
+    GradientTarget = FS_GradientTarget_Z; // 0.003
+    delay(5);
+    break;
+  }
+
+  bool iniWifiStatus = isWiFiConnected;
+  if (!is_AutoCuring && Station_Type != 3)
+  {
+    isWiFiConnected = false;
+  }
+
+  MSGOutput("Scan Two Way");
+  MSGOutput("Scan Step: " + String(motorStep));
+  MSGOutput("StopValue:" + String(StopPDValue));
+  MSGOutput("Backlash: " + String(backlash));
+  MSGOutput("GradientTarget : " + String(GradientTarget, 4));
+  MSGOutput("isWiFiConnected : " + String(isWiFiConnected));
+  CMDOutput(">>" + msg + String(trip));
+
+  double PD_initial = Cal_PD_Input_IL(3);
+  MSGOutput("Initial PD: " + String(PD_initial));
+
+  maxIL_in_FineScan = PD_initial;
+  minIL_in_FineScan = PD_initial;
+
+  if (PD_initial >= StopPDValue)
+    return true;
+
+  //-------------------------------------------Jump to Trip_1 initial position-------------------------------------
+  digitalWrite(DIR_Pin, MotorCC);
+  delay(1);
+
+  if (true)
+  {
+    step(STP_Pin, motorStep * count, delayBetweenStep); // First Jump
+    delay(250);                                         // Default : 100
+    PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+
+    DataOutput(PD_Now);
+    DataOutput(XYZ, PD_Now); // int xyz, double pdValue
+
+    Serial.println("Jump IL: " + String(PD_Now));
+  }
+  // else
+  // {
+  //   for (size_t i = 0; i < count; i++)
+  //   {
+  //     step(STP_Pin, motorStep, delayBetweenStep);
+  //     PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+
+  //     if(PD_Now < (PD_initial - 3.5))
+  //     {
+  //       Serial.println("Jump IL < (IL - 3.5): " + String(PD_Now));
+  //       break;
+  //     }
+  //   }
+  // }
+
+  MotorCC = !MotorCC; // Reverse direction
+  digitalWrite(DIR_Pin, MotorCC);
+
+  delay(stableDelay + 5); // Default: 100
+
+  //-------------------------------------------------------Trip_1 -----------------------------------------------
+
+  if (PD_Now >= StopPDValue)
+  {
+    maxIL_in_FineScan = 0;
+    minIL_in_FineScan = -100;
+    return true;
+  }
+
+  for (int i = 0; i < dataCount; i++)
+  {
+    PD_Value[i] = 0;
+    Step_Value[i] = 0;
+  }
+
+  double IL_Best_Trip1 = PD_Now;
+  long Pos_Best_Trip1 = Get_Position(XYZ);
+  long Pos_Ini_Trip1 = Get_Position(XYZ);
+
+  double IL_Best_Trip = PD_Now;
+  long Pos_Best_Trip = Get_Position(XYZ);
+
+  int data_plus_time = 0;
+
+  for (int i = 0; i < dataCount; i++)
+  {
+    if (isStop)
+      return true;
+
+    if (i == 0)
+    {
+      PD_Value[i] = PD_Now;
+      Step_Value[i] = Get_Position(XYZ);
+      continue;
+    }
+
+    // 馬達移動
+    step(STP_Pin, motorStep, delayBetweenStep);
+    delay(stableDelay);
+
+    if (i > 1 && PD_Value[i - 1] > -2)
+      delay(30);
+
+    // 記錄IL
+    if (i > 0 && PD_Value[i - 1] > -2)
+      PD_Value[i] = Cal_PD_Input_IL(Get_PD_Points * 3); // 2500
+    else
+      PD_Value[i] = Cal_PD_Input_IL(Get_PD_Points);
+
+    // 記錄位置
+    Step_Value[i] = Get_Position(XYZ);
+
+    if (PD_Value[i] > IL_Best_Trip1)
+    {
+      indexofBestIL = i;
+      IL_Best_Trip1 = PD_Value[i];
+      Pos_Best_Trip1 = Get_Position(XYZ);
+    }
+
+    // Update Min, Max IL in Scan Process
+    if (PD_Value[i] > maxIL_in_FineScan)
+      maxIL_in_FineScan = PD_Value[i];
+    if (PD_Value[i] < minIL_in_FineScan)
+      minIL_in_FineScan = PD_Value[i];
+
+    DataOutput(PD_Value[i]);
+    DataOutput(XYZ, PD_Value[i]); // int xyz, double pdValue
+    // DataSent_Server("PD Power:" + String(PD_Value[i]));
+
+    // Gradient analyze
+    if (i > 0)
+    {
+      // 計算目前點斜率
+      Gradient_IL_Step[i - 1] = (PD_Value[i] - PD_Value[i - 1]) / (motorStep / MotorStepRatio);
+
+      if (XYZ == Z_Dir)
+      {
+        Gradient_IL_Step[i - 1] *= (FS_Steps_Z / FS_Steps_X);
+      }
+
+      if (Gradient_IL_Step[i - 1] <= (GradientTarget * -1))
+      {
+        GradientCount = 0;
+
+        GradientDownCount++;
+
+        // 曲線前半段正向上升，並已過最佳點
+        if (isGradCountFixGauss && PD_Value[i] > -4)
+        {
+          // Curfit
+          if (indexofBestIL != 0 && Pos_Best_Trip1 != Get_Position(XYZ))
+          {
+            double x[3];
+            double y[3];
+            for (int k = -1; k < 2; k++)
+            {
+              x[k + 1] = Step_Value[indexofBestIL + k]; // idex * step = real steps
+              y[k + 1] = PD_Value[indexofBestIL + k];   // fill this with your sensor data
+              // Serial.println("Point : " + String(x[k + 1]) + " , " + String(y[k + 1]));
+            }
+            Pos_Best_Trip1 = Curfit(x, y, 3);
+
+            MSGOutput("Best curfit IL position in Trip_1 is: " + String(Pos_Best_Trip1));
+          }
+
+          MSGOutput("Pass best IL");
+
+          break;
+        }
+
+        // 曲線反向下降
+        else if (GradientDownCount > 4 && IL_Best_Trip1 > -20)
+        {
+          // Curfit
+          if (indexofBestIL != 0 && Pos_Best_Trip1 != Get_Position(XYZ))
+          {
+            double x[3];
+            double y[3];
+            for (int k = -1; k < 2; k++)
+            {
+              x[k + 1] = Step_Value[indexofBestIL + k]; // idex * step = real steps
+              y[k + 1] = PD_Value[indexofBestIL + k];   // fill this with your sensor data
+              // Serial.println("Point : " + String(x[k + 1]) + " , " + String(y[k + 1]));
+            }
+            Pos_Best_Trip1 = Curfit(x, y, 3);
+
+            MSGOutput("Best curfit IL position in Trip_1 is: " + String(Pos_Best_Trip1));
+          }
+
+          MSGOutput("Back Direction");
+
+          break;
+        }
+      }
+      else
+      {
+        GradientCount++;
+        GradientDownCount = 0;
+
+        // 判斷圖形是否為順向曲線(擬合高斯)
+        if (GradientCount > 3 && !isGradCountFixGauss)
+          isGradCountFixGauss = true;
+      }
+
+      // 以連續正斜率並目前斜率在目標斜率範圍內，停止耦光 default: -2
+      if (i > 4 && PD_Value[i] > -3 && Gradient_IL_Step[i - 1] <= GradientTarget && GradientCount > 3)
+      {
+        MSGOutput("Gradient (" + String(Gradient_IL_Step[i - 1], 4) + ") <= Target : " + String(GradientTarget, 4));
+
+        if (XYZ == Z_Dir && GradientCount > 4)
+        {
+          MSGOutput("i:" + String(i) + ", Pos_Best_Trip1(Curfit):" + String(Pos_Best_Trip1));
+          double x[5];
+          double y[5];
+          for (int k = i - 4; k <= i; k++)
+          {
+            x[k - (i - 4)] = Step_Value[k]; // idex * step = real steps
+            y[k - (i - 4)] = PD_Value[k];   // fill this with your sensor data
+            // Serial.println("Point : " + String(x[k - (i - 4)]) + " , " + String(y[k - (i - 4)]));
+          }
+          Pos_Best_Trip1 = Curfit_2(x, y, 5);
+          MSGOutput("Best pos in Trip_1 (curfit) is: " + String(Pos_Best_Trip1));
+        }
+
+        DataOutput(PD_Value[i]);
+
+        timer_2 = millis();
+        double ts = (timer_2 - timer_1) * 0.001;
+        CMDOutput("t:" + String(ts, 2));
+
+        isWiFiConnected = iniWifiStatus;
+
+        return true;
+      }
+
+      // else if (i > 5 && PD_Value[i] > -8 && GradientCount > 4 && Pos_Best_Trip1 == Get_Position(XYZ))
+      // {
+      //   // Curfit
+      //   Serial.println("Curfit Jump");
+
+      //   double x[5];
+      //   double y[5];
+      //   for (int k = -4; k <= 0; k++)
+      //   {
+      //     x[k + 4] = Step_Value[indexofBestIL + k]; // idex * step = real steps
+      //     y[k + 4] = PD_Value[indexofBestIL + k];   // fill this with your sensor data
+      //     Serial.println("Point : " + String(x[k + 4]) + " , " + String(y[k + 4]));
+      //   }
+      //   double Pre_Pos_Best_Trip1 = Curfit(x, y, 5);
+
+      //   MSGOutput("Curfit Predict Best IL pos in Trip_1 is: " + String(Pre_Pos_Best_Trip1));
+
+      //   timer_2 = millis();
+      //   double ts = (timer_2 - timer_1) * 0.001;
+      //   CMDOutput("t:" + String(ts, 2));
+
+      //   isWiFiConnected = iniWifiStatus;
+
+      //   return true;
+      // }
+    }
+
+    // 結束Trip 1, 進行curfitting
+    if (IL_Best_Trip1 >= -2 && PD_Value[i] <= (IL_Best_Trip1 - 1.5) && Trips == 1 && i > 4)
+    {
+      Serial.println("IL < (IL-1.5): " + String(PD_Value[i]));
+
+      // Curfit
+      if (indexofBestIL != 0 && Pos_Best_Trip1 != Get_Position(XYZ))
+      {
+        double x[3];
+        double y[3];
+        for (int k = -1; k < 2; k++)
+        {
+          x[k + 1] = Step_Value[indexofBestIL + k]; // idex * step = real steps
+          y[k + 1] = PD_Value[indexofBestIL + k];   // fill this with your sensor data
+          // Serial.println("Point : " + String(x[k + 1]) + " , " + String(y[k + 1]));
+        }
+        Pos_Best_Trip1 = Curfit(x, y, 3);
+
+        MSGOutput("Best curfit IL position in Trip_1 is: " + String(Pos_Best_Trip1));
+      }
+
+      break;
+    }
+
+    // IL 大於 Stop threshold 判斷
+    if (PD_Value[i] >= StopPDValue)
+    {
+      MSGOutput("Better than StopValue");
+      return true;
+    }
+
+    if (Trips == 0 && i > 3)
+    {
+      if ((PD_Value[i] <= PD_Value[i - 1] || abs(PD_Value[i] - PD_Value[i - 1]) <= 0.02) && PD_Value[i] >= -1.8)
+      {
+        MSGOutput("Over best IL in trip 1");
+        PD_Now = Cal_PD_Input_IL(2 * Get_PD_Points);
+        MSGOutput("Final IL: " + String(PD_Now));
+        timer_2 = millis();
+        double ts = (timer_2 - timer_1) * 0.001;
+        CMDOutput("t:" + String(ts, 2));
+        DataOutput(PD_Now);
+        return true;
+      }
+    }
+
+    // 擴增點數
+    if (i == (dataCount - 1) && Pos_Best_Trip1 == Get_Position(XYZ))
+    {
+      Serial.println("Datacount+3");
+      dataCount = dataCount + 3;
+      data_plus_time = data_plus_time + 1;
+
+      motorStep *= 2;
+
+      if (dataCount - dataCount_ori > 20 || data_plus_time > 5)
+      {
+        Serial.println("Data plus time: " + String(data_plus_time));
+        timer_2 = millis();
+        double ts = (timer_2 - timer_1) * 0.001;
+        CMDOutput("t:" + String(ts, 2));
+
+        return true;
+      }
+    }
+
+    // 結束Trip 1, 進行curfitting
+    else if (indexofBestIL != 0 && i == (dataCount - 1) && Pos_Best_Trip1 != Get_Position(XYZ))
+    {
+      // MSGOutput("i:" + String(i) + ", Pos_Best_Trip1:" + String(Pos_Best_Trip1));
+      double x[3];
+      double y[3];
+      for (int k = -1; k < 2; k++)
+      {
+        x[k + 1] = Step_Value[indexofBestIL + k]; // idex * step = real steps
+        y[k + 1] = PD_Value[indexofBestIL + k];   // fill this with your sensor data
+        // Serial.println("Point : " + String(x[k + 1]) + " , " + String(y[k + 1]));
+      }
+      Pos_Best_Trip1 = Curfit(x, y, 3);
+      MSGOutput("Best curfit IL position in Trip_1 is: " + String(Pos_Best_Trip1));
+    }
+  }
+
+  trip++;
+
+  double IL_Best_Trip2 = 0;
+  long Pos_Best_Trip2 = 0;
+  long Pos_Ini_Trip2 = 0;
+
+  //------------------------------------------------------Trip_2 ------------------------------------------------------------
+  MSGOutput(" --- Trip 2 --- ");
+  MSGOutput("Trip Now: " + String(trip) + ", Trips Setting: " + String(Trips));
+
+  GradientCount = 0;
+
+  if (Trips != 1)
+  {
+    CMDOutput("~:" + msg + String(trip));
+
+    IL_Best_Trip2 = PD_Now;
+    Pos_Best_Trip2 = Get_Position(XYZ);
+    Pos_Ini_Trip2 = Get_Position(XYZ);
+
+    for (int i = 0; i < dataCount; i++)
+    {
+      PD_Value[i] = 0;
+      Step_Value[i] = 0;
+    }
+
+    MotorCC = !MotorCC; // Reverse direction
+    digitalWrite(DIR_Pin, MotorCC);
+    delay(5);
+
+    for (int i = 0; i < dataCount; i++)
+    {
+      if (isStop)
+      {
+        Serial.println("Emergency Stop");
+        return true;
+      }
+
+      if (i == 0)
+      {
+        PD_Value[i] = PD_Now;
+        Step_Value[i] = Get_Position(XYZ);
+        continue;
+      }
+
+      step(STP_Pin, motorStep, delayBetweenStep);
+      delay(stableDelay);
+
+      if (i > 1 && PD_Value[i - 1] > -2)
+        delay(30);
+
+      PD_Value[i] = Cal_PD_Input_IL(Get_PD_Points);
+      Step_Value[i] = Get_Position(XYZ);
+
+      if (PD_Value[i] > IL_Best_Trip2)
+      {
+        indexofBestIL = i;
+        IL_Best_Trip2 = PD_Value[i];
+        Pos_Best_Trip2 = Get_Position(XYZ);
+      }
+
+      // Update Min, Max IL in Scan Process
+      if (PD_Value[i] > maxIL_in_FineScan)
+        maxIL_in_FineScan = PD_Value[i];
+      if (PD_Value[i] < minIL_in_FineScan)
+        minIL_in_FineScan = PD_Value[i];
+
+      DataOutput(PD_Value[i]);
+      DataOutput(XYZ, PD_Value[i]); // int xyz, double pdValue
+      DataSent_Server("PD Power:" + String(PD_Value[i]));
+
+      // Gradient analyze
+      if (i > 0)
+      {
+        Gradient_IL_Step[i - 1] = (PD_Value[i] - PD_Value[i - 1]) / motorStep;
+
+        if (Gradient_IL_Step[i - 1] <= -0.01)
+          GradientCount = 0;
+        else
+          GradientCount++;
+
+        if (i > 3)
+        {
+          if (PD_Value[i] > -1.35 && Gradient_IL_Step[i - 1] <= GradientTarget && GradientCount > 3 && PD_Value[i] >= IL_Best_Trip1)
+          {
+            MSGOutput("Gradient (" + String(Gradient_IL_Step[i - 1], 4) + ") <= Target : " + String(GradientTarget, 4));
+
+            timer_2 = millis();
+            double ts = (timer_2 - timer_1) * 0.001;
+            CMDOutput("t:" + String(ts, 2));
+
+            isWiFiConnected = iniWifiStatus;
+
+            return true;
+          }
+        }
+      }
+
+      if (IL_Best_Trip1 >= -2.5 && PD_Value[i] <= (IL_Best_Trip1 - 1.5) && Trips == 1)
+      {
+        Serial.println("IL < (IL-1.5): " + String(PD_Value[i]));
+        break;
+      }
+
+      if (PD_Value[i] >= StopPDValue)
+      {
+        MSGOutput("Better than StopValue");
+        return true;
+      }
+
+      if (indexofBestIL != 0 && i == (dataCount - 1) && Pos_Best_Trip2 != Get_Position(XYZ))
+      {
+        double x[3];
+        double y[3];
+        for (int k = -1; k < 2; k++)
+        {
+          x[k + 1] = Step_Value[indexofBestIL + k]; // idex * step = real steps
+          y[k + 1] = PD_Value[indexofBestIL + k];   // fill this with your sensor data
+          MSGOutput("Point : " + String(x[k + 1]) + " , " + String(y[k + 1]));
+        }
+        Pos_Best_Trip2 = Curfit(x, y, 3);
+        MSGOutput("Best IL position in Trip_2 is: " + String(Pos_Best_Trip2));
+      }
+    }
+  }
+  else
+    trip--;
+
+  trip++;
+  CMDOutput("~:" + msg + String(trip));
+
+  //------------------------------------Trip_3 -------------------------------------------------------
+
+  MSGOutput(" --- Trip 3 --- ");
+
+  double PD_Best = IL_Best_Trip1;
+  int deltaPos = 0;
+  int BestPos = 0;
+
+  if (true)
+  {
+    // Best IL in Trip 2
+    if (IL_Best_Trip2 > IL_Best_Trip1 && (IL_Best_Trip2 - IL_Best_Trip1) > 0.05 && Trips != 1)
+    {
+      if (isStop)
+        return true;
+
+      MotorCC = !MotorCC; // Reverse direction
+      digitalWrite(DIR_Pin, MotorCC);
+      delay(15);
+
+      MSGOutput("Best pos in Trip_2 : " + String(Pos_Best_Trip2)); //------------Best in Trip_2----------------
+
+      if (XYZ == 2)
+        Pos_Best_Trip2 = Pos_Best_Trip2 - (AQ_Scan_Compensation_Steps_Z_A * MotorStepRatio);
+
+      MSGOutput("Best pos in Trip_2 (Compensation) : " + String(Pos_Best_Trip2));
+
+      PD_Best = IL_Best_Trip2;
+
+      BestPos = Pos_Best_Trip2;
+    }
+
+    else //------------Best in Trip_1----------------
+    {
+      MSGOutput("Best in Trip_1 : " + String(Pos_Best_Trip1));
+      MSGOutput("Position Now : " + String(Get_Position(XYZ)));
+
+      if (Pos_Best_Trip1 == Get_Position(XYZ))
+      {
+        PD_Now = Cal_PD_Input_IL(2 * Get_PD_Points);
+
+        timer_2 = millis();
+        double ts = (timer_2 - timer_1) * 0.001;
+        CMDOutput("t:" + String(ts, 2));
+
+        if (abs(PD_Now - IL_Best_Trip1) <= 0.12 || PD_Now > IL_Best_Trip1)
+          return true;
+        else
+          return false;
+      }
+
+      // Best IL in Trip 1 and Trip setting is 1
+      if (Trips == 1)
+      {
+        // MotorCC = !MotorCC; // Reverse direction
+        // digitalWrite(DIR_Pin, MotorCC);
+        // delay(15);
+
+        MSGOutput("Jump to Trip Initial Pos : " + String(Pos_Ini_Trip1));
+        Move_Motor_abs(XYZ, Pos_Ini_Trip1); // Jump to Trip_1 start position
+
+        // MSGOutput("Jump Backlash : " + String(backlash));
+        // step(STP_Pin, backlash, delayBetweenStep);
+
+        delay(300); // 100
+
+        PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+        DataOutput(PD_Now);
+        DataOutput(XYZ, PD_Now); // int xyz, double pdValue
+
+        // MotorCC = !MotorCC; // Reverse direction
+        // digitalWrite(DIR_Pin, MotorCC);
+        // delay(5);
+
+        // deltaPos = abs(Pos_Best_Trip1 - Get_Position(XYZ));
+        // MSGOutput("deltaPos : " + String(deltaPos));
+
+        // MSGOutput("Best in Trip_1 : " + String(Pos_Best_Trip1));
+
+        // BestPos = Pos_Best_Trip1;
+      }
+
+      // if (XYZ == 2)
+      //   Pos_Best_Trip1 = Pos_Best_Trip1 - (AQ_Scan_Compensation_Steps_Z_A * MotorStepRatio);
+
+      MSGOutput("Best in Trip_1 (Compensation) : " + String(Pos_Best_Trip1));
+
+      BestPos = Pos_Best_Trip1;
+    }
+
+    // Move to the best IL position in trip 1 & 2
+    if (!isTrip3Jump)
+    {
+      int failCount = 0;
+      double preIL = Cal_PD_Input_IL(Get_PD_Points);
+
+      while (true)
+      {
+        if (isStop)
+          return true;
+
+        // Feed a step to close to the best IL position
+        if (deltaPos >= motorStep)
+        {
+          deltaPos = deltaPos - motorStep;
+
+          Move_Motor(DIR_Pin, STP_Pin, MotorCC, motorStep, delayBetweenStep, stableDelay); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
+
+          PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+          DataOutput(XYZ, PD_Now); // int xyz, double pdValue
+
+          if (PD_Now >= StopPDValue)
+          {
+            MSGOutput("StopPDValue");
+            break;
+          }
+          if (PD_Now >= PD_Best)
+          {
+            MSGOutput("Reach IL_Best before");
+            break;
+          }
+          if (preIL >= (PD_Best - 0.09) && preIL >= PD_Now)
+          {
+            MSGOutput("Over IL_Best before");
+            break;
+          }
+
+          if (PD_Now < preIL)
+            preIL++;
+          else
+            preIL = 0;
+
+          if (preIL >= 4)
+            break;
+
+          preIL = PD_Now;
+        }
+
+        // Feed final step to the best IL position
+        else if (deltaPos > 0 && deltaPos < motorStep)
+        {
+          Move_Motor(DIR_Pin, STP_Pin, MotorCC, deltaPos, delayBetweenStep, 0); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
+          PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+          DataOutput(XYZ, PD_Now); // int xyz, double pdValue
+          break;
+        }
+        else
+          break;
+      }
+    }
+    else
+    {
+      // Move_Motor(DIR_Pin, STP_Pin, MotorCC, deltaPos, delayBetweenStep, 100); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
+      Move_Motor_abs(XYZ, BestPos); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
+      delay(300);
+      PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+      DataOutput(PD_Now);
+      DataOutput(XYZ, PD_Now); // int xyz, double pdValue
+      MSGOutput("Trip 3 Jump : " + String(BestPos));
+    }
+  }
+
+  // PD_Now = Cal_PD_Input_IL(2*Get_PD_Points);
+  MSGOutput("Best IL: " + String(PD_Best));
+  MSGOutput("Final IL: " + String(PD_Now));
+
+  timer_2 = millis();
+  double ts = (timer_2 - timer_1) * 0.001;
+  CMDOutput("t:" + String(ts, 2));
+
+  isWiFiConnected = iniWifiStatus;
+
+  if (PD_Now < PD_Best - 0.5)
+    return false;
+  else
+    return true;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
+                  bool Direction, int delayBetweenStep, double StopPDValue,
+                  int Get_PD_Points, int Trips, String msg, double slope = 0.001,
+                  double Tilt_X = 0, double Tilt_Y = 0, double Tilt_Z = 0)
+{
+  int DIR_Pin = 0; // 0:X, 1:Y, 2:Z
+  int STP_Pin = 0;
+  int backlash = 0;
+  MotorCC = Direction; // initial direction
+  int trip = 1;
+  int dataCount = 3;
+  int dataCount_ori;
+  int indexofBestIL = 0;
+  double PD_Value[4 * count + 1];
+  // long Step_Value[4 * count + 1];
+  struct_Motor_Pos Pos_Virtual[4 * count + 1];
+  struct_Motor_Pos Pos_Real[4 * count + 1];
+  double Gradient_IL_Step[4 * count + 1];
+  int GradientDownCount = 0;
+  int GradientCount = 0;
+  bool isGradCountFixGauss = false;
+  double GradientTarget = slope; // default: 0.001
+  unsigned long timer_1 = 0, timer_2 = 0;
+  // delayBetweenStep = stableDelay;
+  timer_1 = millis();
+
+  dataCount = 2 * count + 1;
+  dataCount_ori = dataCount;
+
+  switch (XYZ)
+  {
+  case X_Dir:
+    DIR_Pin = X_DIR_Pin;
+    STP_Pin = X_STP_Pin;
+    backlash = X_backlash;
+    GradientTarget = FS_GradientTarget_X; // 0.003
+    break;
+  case Y_Dir:
+    DIR_Pin = Y_DIR_Pin;
+    STP_Pin = Y_STP_Pin;
+    backlash = Y_backlash;
+    GradientTarget = FS_GradientTarget_Y; // 0.002
+    break;
+  case Z_Dir:
+    DIR_Pin = Z_DIR_Pin;
+    STP_Pin = Z_STP_Pin;
+    backlash = Z_backlash;
+    GradientTarget = FS_GradientTarget_Z; // 0.003
+    break;
+  }
+
+  bool iniWifiStatus = isWiFiConnected;
+  if (!is_AutoCuring && Station_Type != 3)
+  {
+    isWiFiConnected = false;
+  }
+
+  MSGOutput("Scan Two Way");
+  MSGOutput("Scan Step: " + String(motorStep));
+  MSGOutput("StopValue:" + String(StopPDValue));
+  MSGOutput("Backlash: " + String(backlash));
+  MSGOutput("GradientTarget : " + String(GradientTarget, 4));
+  MSGOutput("isWiFiConnected : " + String(isWiFiConnected));
+  CMDOutput(">>" + msg + String(trip));
+
+  double PD_initial = Cal_PD_Input_IL(3);
+  MSGOutput("Initial PD: " + String(PD_initial));
+  Serial.println("Pos : " + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + "=" + String(PD_initial));
+
+  maxIL_in_FineScan = PD_initial;
+  minIL_in_FineScan = PD_initial;
+
+  if (PD_initial >= StopPDValue)
+    return true;
+
+  struct_Motor_Pos OriginalPos;
+  OriginalPos.X = Pos_Now.X;
+  OriginalPos.Y = Pos_Now.Y;
+  OriginalPos.Z = Pos_Now.Z;
+
+  struct_Motor_Pos TargetPos;
+  TargetPos.X = 0;
+  TargetPos.Y = 0;
+  TargetPos.Z = 0;
+
+  // Target position Matrix
+  BLA::Matrix<3, 1> M_A;
+
+  // Rotation Matrix
+  BLA::Matrix<3, 3> M_X;
+  BLA::Matrix<3, 3> M_Y;
+  BLA::Matrix<3, 3> M_Z;
+
+  double tx = Tilt_X * (PI / 180.0);
+  double ty = Tilt_Y * (PI / 180.0);
+  double tz = Tilt_Z * (PI / 180.0);
+
+  M_X = {1, 0, 0, 0, cos(tx), -sin(tx), 0, sin(tx), cos(tx)}; // Rotation Matrix on X axis
+  M_Y = {cos(ty), 0, sin(ty), 0, 1, 0, -sin(ty), 0, cos(ty)}; // Rotation Matrix on Y axis
+  M_Z = {cos(tz), -sin(tz), 0, sin(tz), cos(tz), 0, 0, 0, 1};
+
+  //-------------------------------------------Jump to Trip_1 initial position-------------------------------------
+  digitalWrite(DIR_Pin, MotorCC);
+  delay(5);
+
+  if (true)
+  {
+    if (MotorCC)
+    {
+      if (XYZ == 0)
+        TargetPos.X += motorStep * count;
+      else if (XYZ == 1)
+        TargetPos.Y += motorStep * count;
+      else if (XYZ == 2)
+        TargetPos.Z += motorStep * count;
+    }
+    else
+    {
+      if (XYZ == 0)
+        TargetPos.X -= motorStep * count;
+      else if (XYZ == 1)
+        TargetPos.Y -= motorStep * count;
+      else if (XYZ == 2)
+        TargetPos.Z -= motorStep * count;
+    }
+
+    // 旋轉目標點
+    M_A = {TargetPos.X, TargetPos.Y, TargetPos.Z};
+
+    BLA::Matrix<3, 1> M = M_X * M_Y * M_Z * M_A;
+
+    // 馬達移動(加上初始位移量)
+    Move_Motor_abs_all(M(0) + OriginalPos.X, M(1) + OriginalPos.Y, M(2) + OriginalPos.Z, delayBetweenStep); // 初始位移
+    // step(STP_Pin, motorStep * count, delayBetweenStep); // First Jump
+    delay(250); // Default : 100
+    PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+
+    DataOutput(PD_Now);
+    DataOutput(XYZ, PD_Now); // int xyz, double pdValue
+
+    Serial.println("Jump IL: " + String(PD_Now));
+
+    Serial.println("Pos : " + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + "=" + String(PD_Now));
+
+    // Move_Motor_abs_all(OriginalPos.X, OriginalPos.Y, OriginalPos.Z, delayBetweenStep); // 初始位移
+    // return 0;
+  }
+
+  MotorCC = !MotorCC; // Reverse direction
+  digitalWrite(DIR_Pin, MotorCC);
+  delay(5); // Default: 5
+
+  //-------------------------------------------------------Trip_1 -----------------------------------------------
+
+  if (PD_Now >= StopPDValue)
+  {
+    maxIL_in_FineScan = 0;
+    minIL_in_FineScan = -100;
+    return true;
+  }
+
+  double IL_Best_Trip1 = PD_Now;
+
+  struct_Motor_Pos BestPosXYZ, Pos_Best_Trip1, Pos_Ini_Trip1, CurfitPos_OnAxis;
+  BestPosXYZ = Get_Position();
+  Pos_Best_Trip1 = Get_Position();
+  Pos_Ini_Trip1 = Get_Position();
+  CurfitPos_OnAxis = Get_Position();
+
+  // Serial.println("Virtual Points");
+
+  // 建立虛擬點陣列
+  for (int i = 0; i < (4 * count + 1); i++)
+  {
+    PD_Value[i] = -80;
+
+    if (i == 0)
+    {
+      // Pos_Virtual[i] = Pos_Ini_Trip1;
+      Pos_Virtual[i].X = TargetPos.X;
+      Pos_Virtual[i].Y = TargetPos.Y;
+      Pos_Virtual[i].Z = TargetPos.Z;
+    }
+    else
+    {
+      if (MotorCC)
+      {
+        if (XYZ == 0)
+          Pos_Virtual[i].X = Pos_Virtual[i - 1].X + motorStep;
+        else if (XYZ == 1)
+          Pos_Virtual[i].Y = Pos_Virtual[i - 1].Y + motorStep;
+        else if (XYZ == 2)
+          Pos_Virtual[i].Z = Pos_Virtual[i - 1].Z + motorStep;
+      }
+      else
+      {
+        if (XYZ == 0)
+          Pos_Virtual[i].X = Pos_Virtual[i - 1].X - motorStep;
+        else if (XYZ == 1)
+          Pos_Virtual[i].Y = Pos_Virtual[i - 1].Y - motorStep;
+        else if (XYZ == 2)
+          Pos_Virtual[i].Z = Pos_Virtual[i - 1].Z - motorStep;
+      }
+    }
+
+    // Serial.println("Pos : " + String(Pos_Virtual[i].X) + "," + String(Pos_Virtual[i].Y) + "," + String(Pos_Virtual[i].Z) + "=" + String(PD_Value[i]));
+  }
+
+  Serial.println("Real Points");
+
+  // return 0;
+
+  double IL_Best_Trip = PD_Now;
+
+  int data_plus_time = 0;
+
+  for (int i = 0; i < dataCount; i++)
+  {
+    if (isStop)
+      return true;
+
+    if (i >= (4 * count))
+    {
+      break;
+    }
+
+    if (i == 0)
+    {
+      PD_Value[i] = PD_Now;
+      continue;
+    }
+
+    // 旋轉目標點
+    M_A = {Pos_Virtual[i].X, Pos_Virtual[i].Y, Pos_Virtual[i].Z};
+
+    BLA::Matrix<3, 1> M = M_X * M_Y * M_Z * M_A;
+
+    // 馬達移動(加上初始位移量)
+    Move_Motor_abs_all(M(0) + OriginalPos.X, M(1) + OriginalPos.Y, M(2) + OriginalPos.Z, delayBetweenStep); // 初始位移
+
+    // 馬達移動
+    // Move_Motor_abs_all(M(0), M(1), M(2), delayBetweenStep);
+    delay(stableDelay);
+
+    if (i > 1 && PD_Value[i - 1] > -2)
+      delay(30);
+
+    // 記錄IL
+    PD_Value[i] = Cal_PD_Input_IL(Get_PD_Points); // 2500
+
+    Pos_Real[i].X = Pos_Now.X;
+    Pos_Real[i].Y = Pos_Now.Y;
+    Pos_Real[i].Z = Pos_Now.Z;
+
+    // 記錄位置
+    // Get_Position(Pos_Real[i]);
+
+    if (PD_Value[i] > IL_Best_Trip1)
+    {
+      indexofBestIL = i;
+      IL_Best_Trip1 = PD_Value[i];
+      Pos_Best_Trip1 = Get_Position();
+    }
+
+    // Update Min, Max IL in Scan Process
+    if (PD_Value[i] > maxIL_in_FineScan)
+      maxIL_in_FineScan = PD_Value[i];
+    if (PD_Value[i] < minIL_in_FineScan)
+      minIL_in_FineScan = PD_Value[i];
+
+    DataOutput(PD_Value[i]);
+    DataOutput(XYZ, PD_Value[i]); // int xyz, double pdValue
+
+    // Gradient analyze
+    if (i > 0)
+    {
+      // 計算目前點斜率
+      Gradient_IL_Step[i - 1] = (PD_Value[i] - PD_Value[i - 1]) / (motorStep / MotorStepRatio);
+
+      if (XYZ == Z_Dir)
+      {
+        Gradient_IL_Step[i - 1] *= (FS_Steps_Z / FS_Steps_X);
+      }
+
+      if (Gradient_IL_Step[i - 1] <= (GradientTarget * -1))
+      {
+        GradientCount = 0;
+
+        GradientDownCount++;
+
+        // 曲線前半段正向上升，並已過最佳點
+        if (isGradCountFixGauss && PD_Value[i] > -4)
+        {
+          // Curfit
+          if (indexofBestIL != 0 && !Compare_Position(Pos_Best_Trip1, Pos_Now))
+          {
+            for (int h = 0; h <= 2; h++)
+            {
+              double x[3];
+              double y[3];
+              for (int k = -1; k < 2; k++)
+              {
+                x[k + 1] = Get_1_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
+                y[k + 1] = PD_Value[indexofBestIL + k];                    // fill this with your sensor data
+              }
+
+              if (x[0] == x[1] && x[1] == x[2])
+              {
+                // 軸上的理想點
+                if (h == 0)
+                  CurfitPos_OnAxis.X = x[0];
+                else if (h == 1)
+                  CurfitPos_OnAxis.Y = x[0];
+                else if (h == 2)
+                  CurfitPos_OnAxis.Z = x[0];
+                continue;
+              }
+
+              if (y[0] == y[1] && y[1] == y[2])
+              {
+                // 軸上的理想點
+                if (h == 0)
+                  CurfitPos_OnAxis.X = x[1];
+                else if (h == 1)
+                  CurfitPos_OnAxis.Y = x[1];
+                else if (h == 2)
+                  CurfitPos_OnAxis.Z = x[1];
+                continue;
+              }
+
+              long result = Curfit(x, y, 3);
+
+              // 若結果超出範圍
+              {
+                if (result < x[0] || result > x[2])
+                {
+                  // 軸上的理想點
+                  if (h == 0)
+                    CurfitPos_OnAxis.X = x[1];
+                  else if (h == 1)
+                    CurfitPos_OnAxis.Y = x[1];
+                  else if (h == 2)
+                    CurfitPos_OnAxis.Z = x[1];
+
+                  // MSGOutput("No fit");
+                  MSGOutput("No fit (outrange):" + String(x[1]));
+
+                  continue;
+                }
+              }
+
+              // 軸上的理想點
+              if (h == 0)
+                CurfitPos_OnAxis.X = result;
+              else if (h == 1)
+                CurfitPos_OnAxis.Y = result;
+              else if (h == 2)
+                CurfitPos_OnAxis.Z = result;
+            }
+
+            Pos_Best_Trip1 = CurfitPos_OnAxis;
+
+            MSGOutput("Best curfit IL position in Trip_1 is: " + Show_Position(Pos_Best_Trip1));
+          }
+
+          MSGOutput("Pass best IL");
+
+          break;
+        }
+
+        // 曲線反向下降
+        else if (GradientDownCount > 4 && IL_Best_Trip1 > -20)
+        {
+          // Curfit
+          if (indexofBestIL != 0 && !Compare_Position(Pos_Best_Trip1, Pos_Now))
+          {
+            for (int h = 0; h <= 2; h++)
+            {
+              double x[3];
+              double y[3];
+              for (int k = -1; k < 2; k++)
+              {
+                x[k + 1] = Get_1_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
+                y[k + 1] = PD_Value[indexofBestIL + k];                    // fill this with your sensor data
+              }
+
+              if (x[0] == x[1] && x[1] == x[2])
+              {
+                // 軸上的理想點
+                if (h == 0)
+                  CurfitPos_OnAxis.X = x[0];
+                else if (h == 1)
+                  CurfitPos_OnAxis.Y = x[0];
+                else if (h == 2)
+                  CurfitPos_OnAxis.Z = x[0];
+
+                MSGOutput("No fit");
+
+                continue;
+              }
+
+              if (y[0] == y[1] && y[1] == y[2])
+              {
+                // 軸上的理想點
+                if (h == 0)
+                  CurfitPos_OnAxis.X = x[1];
+                else if (h == 1)
+                  CurfitPos_OnAxis.Y = x[1];
+                else if (h == 2)
+                  CurfitPos_OnAxis.Z = x[1];
+
+                MSGOutput("No fit");
+
+                continue;
+              }
+
+              long result = Curfit(x, y, 3);
+
+              // 若結果超出範圍
+              {
+                if (result < x[0] || result > x[2])
+                {
+                  // 軸上的理想點
+                  if (h == 0)
+                    CurfitPos_OnAxis.X = x[1];
+                  else if (h == 1)
+                    CurfitPos_OnAxis.Y = x[1];
+                  else if (h == 2)
+                    CurfitPos_OnAxis.Z = x[1];
+
+                  // MSGOutput("No fit");
+                  MSGOutput("No fit (outrange):" + String(x[1]));
+
+                  continue;
+                }
+              }
+
+              MSGOutput("fit:" + String(result));
+
+              // 軸上的理想點
+              if (h == 0)
+                CurfitPos_OnAxis.X = result;
+              else if (h == 1)
+                CurfitPos_OnAxis.Y = result;
+              else if (h == 2)
+                CurfitPos_OnAxis.Z = result;
+            }
+
+            Pos_Best_Trip1 = CurfitPos_OnAxis;
+
+            MSGOutput("Best curfit IL position in Trip_1 is: " + Show_Position(Pos_Best_Trip1));
+          }
+
+          MSGOutput("GradientDown - Back Direction");
+
+          break;
+        }
+      }
+      else
+      {
+        GradientCount++;
+        GradientDownCount = 0;
+
+        // 判斷圖形是否為順向曲線(擬合高斯)
+        if (GradientCount > 3 && !isGradCountFixGauss)
+          isGradCountFixGauss = true;
+      }
+
+      // 以連續正斜率並目前斜率在目標斜率範圍內，停止耦光 default: -2
+      if (i > 4 && PD_Value[i] > -3 && Gradient_IL_Step[i - 1] <= GradientTarget && GradientCount > 3)
+      {
+        MSGOutput("Gradient (" + String(Gradient_IL_Step[i - 1], 4) + ") <= Target : " + String(GradientTarget, 4));
+
+        if (XYZ == Z_Dir && GradientCount > 4)
+        {
+          MSGOutput("i:" + String(i) + ", Pos_Best_Trip1(Curfit):" + Show_Position(Pos_Best_Trip1));
+
+          for (int h = 0; h <= 2; h++)
+          {
+            double x[5];
+            double y[5];
+            for (int k = i - 4; k <= i; k++)
+            {
+              x[k - (i - 4)] = Get_1_Position(Pos_Virtual[k], h); // idex * step = real steps
+              y[k - (i - 4)] = PD_Value[k];                       // fill this with your sensor data
+            }
+
+            if (x[0] == x[1] && x[1] == x[2] && x[2] == x[3] && x[3] == x[4])
+            {
+              // 軸上的理想點
+              if (h == 0)
+                CurfitPos_OnAxis.X = x[0];
+              else if (h == 1)
+                CurfitPos_OnAxis.Y = x[0];
+              else if (h == 2)
+                CurfitPos_OnAxis.Z = x[0];
+              continue;
+            }
+
+            if (y[0] == y[1] && y[1] == y[2] && y[2] == y[3] && y[3] == y[4])
+            {
+              // 軸上的理想點
+              if (h == 0)
+                CurfitPos_OnAxis.X = x[1];
+              else if (h == 1)
+                CurfitPos_OnAxis.Y = x[1];
+              else if (h == 2)
+                CurfitPos_OnAxis.Z = x[1];
+              continue;
+            }
+
+            long result = Curfit_2(x, y, 3);
+
+            // 若結果超出範圍
+            {
+              if (result < x[0] || result > x[2])
+              {
+                // 軸上的理想點
+                if (h == 0)
+                  CurfitPos_OnAxis.X = x[1];
+                else if (h == 1)
+                  CurfitPos_OnAxis.Y = x[1];
+                else if (h == 2)
+                  CurfitPos_OnAxis.Z = x[1];
+
+                // MSGOutput("No fit");
+                MSGOutput("No fit (outrange):" + String(x[1]));
+
+                continue;
+              }
+            }
+
+            // 軸上的理想點
+            if (h == 0)
+              CurfitPos_OnAxis.X = result;
+            else if (h == 1)
+              CurfitPos_OnAxis.Y = result;
+            else if (h == 2)
+              CurfitPos_OnAxis.Z = result;
+          }
+
+          Pos_Best_Trip1 = CurfitPos_OnAxis;
+
+          MSGOutput("Best pos in Trip_1 (curfit) is: " + Show_Position(Pos_Best_Trip1));
+        }
+
+        DataOutput(PD_Value[i]);
+
+        timer_2 = millis();
+        double ts = (timer_2 - timer_1) * 0.001;
+        CMDOutput("t:" + String(ts, 2));
+
+        isWiFiConnected = iniWifiStatus;
+
+        return true;
+      }
+    }
+
+    // 結束Trip 1, 進行curfitting
+    if (IL_Best_Trip1 >= -2 && PD_Value[i] <= (IL_Best_Trip1 - 1.5) && Trips == 1 && i > 4)
+    {
+      Serial.println("IL < (IL-1.5): " + String(PD_Value[i]));
+
+      // Curfit
+      if (indexofBestIL != 0 && !Compare_Position(Pos_Best_Trip1, Pos_Now))
+      {
+        for (int h = 0; h <= 2; h++)
+        {
+          double x[3];
+          double y[3];
+          for (int k = -1; k < 2; k++)
+          {
+            x[k + 1] = Get_1_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
+            y[k + 1] = PD_Value[indexofBestIL + k];                    // fill this with your sensor data
+          }
+
+          if (x[0] == x[1] && x[1] == x[2])
+          {
+            // 軸上的理想點
+            if (h == 0)
+              CurfitPos_OnAxis.X = x[0];
+            else if (h == 1)
+              CurfitPos_OnAxis.Y = x[0];
+            else if (h == 2)
+              CurfitPos_OnAxis.Z = x[0];
+            continue;
+          }
+
+          if (y[0] == y[1] && y[1] == y[2])
+          {
+            // 軸上的理想點
+            if (h == 0)
+              CurfitPos_OnAxis.X = x[1];
+            else if (h == 1)
+              CurfitPos_OnAxis.Y = x[1];
+            else if (h == 2)
+              CurfitPos_OnAxis.Z = x[1];
+            continue;
+          }
+
+          long result = Curfit(x, y, 3);
+
+          // 若結果超出範圍
+          {
+            if (result < x[0] || result > x[2])
+            {
+              // 軸上的理想點
+              if (h == 0)
+                CurfitPos_OnAxis.X = x[1];
+              else if (h == 1)
+                CurfitPos_OnAxis.Y = x[1];
+              else if (h == 2)
+                CurfitPos_OnAxis.Z = x[1];
+
+              // MSGOutput("No fit");
+              MSGOutput("No fit (outrange):" + String(x[1]));
+
+              continue;
+            }
+          }
+
+          // 軸上的理想點
+          if (h == 0)
+            CurfitPos_OnAxis.X = result;
+          else if (h == 1)
+            CurfitPos_OnAxis.Y = result;
+          else if (h == 2)
+            CurfitPos_OnAxis.Z = result;
+        }
+
+        Pos_Best_Trip1 = CurfitPos_OnAxis;
+
+        MSGOutput("Best curfit IL position in Trip_1 is: " + Show_Position(Pos_Best_Trip1));
+      }
+
+      break;
+    }
+
+    // IL 大於 Stop threshold 判斷
+    if (PD_Value[i] >= StopPDValue)
+    {
+      MSGOutput("Better than StopValue");
+      return true;
+    }
+
+    if (Trips == 0 && i > 3)
+    {
+      if ((PD_Value[i] <= PD_Value[i - 1] || abs(PD_Value[i] - PD_Value[i - 1]) <= 0.02) && PD_Value[i] >= -1.8)
+      {
+        MSGOutput("Over best IL in trip 1");
+        PD_Now = Cal_PD_Input_IL(2 * Get_PD_Points);
+        MSGOutput("Final IL: " + String(PD_Now));
+        timer_2 = millis();
+        double ts = (timer_2 - timer_1) * 0.001;
+        CMDOutput("t:" + String(ts, 2));
+        DataOutput(PD_Now);
+        return true;
+      }
+    }
+
+    // 擴增點數
+    if (i == (dataCount - 1) && Compare_Position(Pos_Best_Trip1, Pos_Now))
+    {
+      Serial.println("Datacount+3");
+      dataCount = dataCount + 3;
+      data_plus_time = data_plus_time + 1;
+
+      motorStep *= 2;
+
+      if (dataCount - dataCount_ori > 20 || data_plus_time > 5)
+      {
+        Serial.println("Data plus time: " + String(data_plus_time));
+        timer_2 = millis();
+        double ts = (timer_2 - timer_1) * 0.001;
+        CMDOutput("t:" + String(ts, 2));
+
+        return true;
+      }
+    }
+
+    // 結束Trip 1, 進行curfitting
+    else if (indexofBestIL != 0 && i == (dataCount - 1) && !Compare_Position(Pos_Best_Trip1, Pos_Now))
+    {
+      for (int h = 0; h <= 2; h++)
+      {
+        double x[3];
+        double y[3];
+        for (int k = -1; k < 2; k++)
+        {
+          x[k + 1] = Get_1_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
+          y[k + 1] = PD_Value[indexofBestIL + k];                    // fill this with your sensor data
+        }
+
+        if (x[0] == x[1] && x[1] == x[2])
+        {
+          // 軸上的理想點
+          if (h == 0)
+            CurfitPos_OnAxis.X = x[0];
+          else if (h == 1)
+            CurfitPos_OnAxis.Y = x[0];
+          else if (h == 2)
+            CurfitPos_OnAxis.Z = x[0];
+          continue;
+        }
+
+        if (y[0] == y[1] && y[1] == y[2])
+        {
+          // 軸上的理想點
+          if (h == 0)
+            CurfitPos_OnAxis.X = x[1];
+          else if (h == 1)
+            CurfitPos_OnAxis.Y = x[1];
+          else if (h == 2)
+            CurfitPos_OnAxis.Z = x[1];
+          continue;
+        }
+
+        long result = Curfit(x, y, 3);
+
+        // 若結果超出範圍
+        {
+          if (result < x[0] || result > x[2])
+          {
+            // 軸上的理想點
+            if (h == 0)
+              CurfitPos_OnAxis.X = x[1];
+            else if (h == 1)
+              CurfitPos_OnAxis.Y = x[1];
+            else if (h == 2)
+              CurfitPos_OnAxis.Z = x[1];
+
+            // MSGOutput("No fit");
+            MSGOutput("No fit (outrange):" + String(x[1]));
+
+            continue;
+          }
+        }
+
+        // 軸上的理想點
+        if (h == 0)
+          CurfitPos_OnAxis.X = result;
+        else if (h == 1)
+          CurfitPos_OnAxis.Y = result;
+        else if (h == 2)
+          CurfitPos_OnAxis.Z = result;
+      }
+
+      Pos_Best_Trip1 = CurfitPos_OnAxis;
+
+      MSGOutput("Best curfit IL position in Trip_1 is: " + Show_Position(Pos_Best_Trip1));
+      MSGOutput("End Trip1");
+    }
+  }
+
+  trip++;
+
+  double IL_Best_Trip2 = 0;
+  // long Pos_Best_Trip2 = 0;
+  // long Pos_Ini_Trip2 = 0;
+  struct_Motor_Pos Pos_Best_Trip2, Pos_Ini_Trip2;
+
+  //------------------------------------------------------Trip_2 ------------------------------------------------------------
+  MSGOutput(" --- Trip 2 --- ");
+  MSGOutput("Trip Now: " + String(trip) + ", Trips Setting: " + String(Trips));
+
+  GradientCount = 0;
+
+  if (Trips != 1)
+  {
+    CMDOutput("~:" + msg + String(trip));
+
+    IL_Best_Trip2 = PD_Now;
+
+    Pos_Best_Trip2 = Get_Position();
+    Pos_Ini_Trip2 = Get_Position();
+
+    // Pos_Best_Trip2 = Get_Position(XYZ);
+    // Pos_Ini_Trip2 = Get_Position(XYZ);
+
+    // 建立虛擬點陣列
+    for (int i = 0; i < dataCount; i++)
+    {
+      PD_Value[i] = -80;
+
+      if (i == 0)
+      {
+        // Pos_Virtual[i] = Pos_Ini_Trip1;
+        Pos_Virtual[i].X = 0;
+        Pos_Virtual[i].Y = 0;
+        Pos_Virtual[i].Z = 0;
+      }
+      else
+      {
+        if (MotorCC)
+        {
+          if (XYZ == 0)
+            Pos_Virtual[i].X = Pos_Virtual[i - 1].X + motorStep;
+          else if (XYZ == 1)
+            Pos_Virtual[i].Y = Pos_Virtual[i - 1].Y + motorStep;
+          else if (XYZ == 2)
+            Pos_Virtual[i].Z = Pos_Virtual[i - 1].Z + motorStep;
+        }
+        else
+        {
+          if (XYZ == 0)
+            Pos_Virtual[i].X = Pos_Virtual[i - 1].X - motorStep;
+          else if (XYZ == 1)
+            Pos_Virtual[i].Y = Pos_Virtual[i - 1].Y - motorStep;
+          else if (XYZ == 2)
+            Pos_Virtual[i].Z = Pos_Virtual[i - 1].Z - motorStep;
+        }
+      }
+    }
+
+    MotorCC = !MotorCC; // Reverse direction
+    digitalWrite(DIR_Pin, MotorCC);
+    delay(5);
+
+    for (int i = 0; i < dataCount; i++)
+    {
+      if (isStop)
+      {
+        Serial.println("Emergency Stop");
+        return true;
+      }
+
+      if (i == 0)
+      {
+        PD_Value[i] = PD_Now;
+        continue;
+      }
+
+      // 旋轉目標點
+      M_A = {Pos_Virtual[i].X, Pos_Virtual[i].Y, Pos_Virtual[i].Z};
+
+      BLA::Matrix<3, 1> M = M_X * M_Y * M_Z * M_A;
+
+      // 馬達移動(加上初始位移量)
+      Move_Motor_abs_all(M(0) + OriginalPos.X, M(1) + OriginalPos.Y, M(2) + OriginalPos.Z, delayBetweenStep); // 初始位移
+
+      // 馬達移動
+      // Move_Motor_abs_all(M(0), M(1), M(2), delayBetweenStep);
+      delay(stableDelay);
+
+      if (i > 1 && PD_Value[i - 1] > -2)
+        delay(30);
+
+      PD_Value[i] = Cal_PD_Input_IL(Get_PD_Points);
+
+      if (PD_Value[i] > IL_Best_Trip2)
+      {
+        indexofBestIL = i;
+        IL_Best_Trip2 = PD_Value[i];
+        Pos_Best_Trip2 = Get_Position();
+      }
+
+      // Update Min, Max IL in Scan Process
+      if (PD_Value[i] > maxIL_in_FineScan)
+        maxIL_in_FineScan = PD_Value[i];
+      if (PD_Value[i] < minIL_in_FineScan)
+        minIL_in_FineScan = PD_Value[i];
+
+      DataOutput(PD_Value[i]);
+      DataOutput(XYZ, PD_Value[i]); // int xyz, double pdValue
+
+      // Gradient analyze
+      if (i > 0)
+      {
+        Gradient_IL_Step[i - 1] = (PD_Value[i] - PD_Value[i - 1]) / motorStep;
+
+        if (Gradient_IL_Step[i - 1] <= -0.01)
+          GradientCount = 0;
+        else
+          GradientCount++;
+
+        if (i > 3)
+        {
+          if (PD_Value[i] > -1.35 && Gradient_IL_Step[i - 1] <= GradientTarget && GradientCount > 3 && PD_Value[i] >= IL_Best_Trip1)
+          {
+            MSGOutput("Gradient (" + String(Gradient_IL_Step[i - 1], 4) + ") <= Target : " + String(GradientTarget, 4));
+
+            timer_2 = millis();
+            double ts = (timer_2 - timer_1) * 0.001;
+            CMDOutput("t:" + String(ts, 2));
+
+            isWiFiConnected = iniWifiStatus;
+
+            return true;
+          }
+        }
+      }
+
+      if (IL_Best_Trip1 >= -2.5 && PD_Value[i] <= (IL_Best_Trip1 - 1.5) && Trips == 1)
+      {
+        Serial.println("IL < (IL-1.5): " + String(PD_Value[i]));
+        break;
+      }
+
+      if (PD_Value[i] >= StopPDValue)
+      {
+        MSGOutput("Better than StopValue");
+        return true;
+      }
+
+      if (indexofBestIL != 0 && i == (dataCount - 1) && !Compare_Position(Pos_Best_Trip2, Pos_Now))
+      {
+        double x[3];
+        double y[3];
+        for (int k = -1; k < 2; k++)
+        {
+          // x[k + 1] = Step_Value[indexofBestIL + k]; // idex * step = real steps
+          x[k + 1] = Get_1_Position(Pos_Virtual[indexofBestIL + k], XYZ); // idex * step = real steps
+          y[k + 1] = PD_Value[indexofBestIL + k];                         // fill this with your sensor data
+          // MSGOutput("Point : " + String(x[k + 1]) + " , " + String(y[k + 1]));
+        }
+
+        long result = Curfit(x, y, 3);
+
+        // 軸上的理想點
+        if (XYZ == 0)
+          CurfitPos_OnAxis.X = result;
+        else if (XYZ == 1)
+          CurfitPos_OnAxis.Y = result;
+        else if (XYZ == 2)
+          CurfitPos_OnAxis.Z = result;
+
+        // 矩陣旋轉理想點
+        M_A = {CurfitPos_OnAxis.X, CurfitPos_OnAxis.Y, CurfitPos_OnAxis.Z};
+
+        BLA::Matrix<3, 1> M = M_X * M_Y * M_Z * M_A;
+
+        Pos_Best_Trip2.X = M(0) + OriginalPos.X;
+        Pos_Best_Trip2.Y = M(1) + OriginalPos.Y;
+        Pos_Best_Trip2.Z = M(2) + OriginalPos.Z;
+
+        MSGOutput("Best curfit IL position in Trip_2 is: " + Show_Position(Pos_Best_Trip2));
+      }
+    }
+  }
+  else
+    trip--;
+
+  trip++;
+  CMDOutput("~:" + msg + String(trip));
+
+  //------------------------------------Trip_3 -------------------------------------------------------
+
+  MSGOutput(" --- Trip 3 --- ");
+
+  double PD_Best = IL_Best_Trip1;
+  int deltaPos = 0;
+  int BestPos = 0;
+
+  if (true)
+  {
+    // Best IL in Trip 2
+    if (IL_Best_Trip2 > IL_Best_Trip1 && (IL_Best_Trip2 - IL_Best_Trip1) > 0.05 && Trips != 1)
+    {
+      if (isStop)
+        return true;
+
+      MotorCC = !MotorCC; // Reverse direction
+      digitalWrite(DIR_Pin, MotorCC);
+      delay(15);
+
+      MSGOutput("Best pos in Trip_2 : " + Show_Position(Pos_Best_Trip2)); //------------Best in Trip_2----------------
+
+      // if (XYZ == 2)
+      //   Pos_Best_Trip2 = Pos_Best_Trip2 - (AQ_Scan_Compensation_Steps_Z_A * MotorStepRatio);
+
+      // MSGOutput("Best pos in Trip_2 (Compensation) : " + Show_Position(Pos_Best_Trip2));
+
+      PD_Best = IL_Best_Trip2;
+
+      BestPosXYZ = Pos_Best_Trip2;
+    }
+
+    else //------------Best in Trip_1----------------
+    {
+      MSGOutput("Best in Trip_1 : " + Show_Position(Pos_Best_Trip1));
+      MSGOutput("Position Now : " + String(Get_Position(XYZ)));
+
+      if (Compare_Position(Pos_Best_Trip1, Pos_Now))
+      {
+        PD_Now = Cal_PD_Input_IL(2 * Get_PD_Points);
+
+        timer_2 = millis();
+        double ts = (timer_2 - timer_1) * 0.001;
+        CMDOutput("t:" + String(ts, 2));
+
+        if (abs(PD_Now - IL_Best_Trip1) <= 0.12 || PD_Now > IL_Best_Trip1)
+          return true;
+        else
+          return false;
+      }
+
+      // Best IL in Trip 1 and Trip setting is 1
+      if (Trips == 1)
+      {
+        // MotorCC = !MotorCC; // Reverse direction
+        // digitalWrite(DIR_Pin, MotorCC);
+        // delay(15);
+
+        MSGOutput("Jump to Trip Initial Pos : " + Show_Position(Pos_Ini_Trip1));
+        Move_Motor_abs_all(Pos_Ini_Trip1.X, Pos_Ini_Trip1.Y, Pos_Ini_Trip1.Z, delayBetweenStep); // Jump to Trip_1 start position
+
+        // MSGOutput("Jump Backlash : " + String(backlash));
+        // step(STP_Pin, backlash, delayBetweenStep);
+
+        delay(300); // 100
+
+        PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+        DataOutput(PD_Now);
+        DataOutput(XYZ, PD_Now); // int xyz, double pdValue
+
+        // MotorCC = !MotorCC; // Reverse direction
+        // digitalWrite(DIR_Pin, MotorCC);
+        // delay(5);
+
+        // deltaPos = abs(Pos_Best_Trip1 - Get_Position(XYZ));
+        // MSGOutput("deltaPos : " + String(deltaPos));
+
+        // MSGOutput("Best in Trip_1 : " + String(Pos_Best_Trip1));
+
+        // BestPos = Pos_Best_Trip1;
+      }
+
+      // if (XYZ == 2)
+      //   Pos_Best_Trip1 = Pos_Best_Trip1 - (AQ_Scan_Compensation_Steps_Z_A * MotorStepRatio);
+
+      // MSGOutput("Best in Trip_1 (Compensation) : " + Show_Position(Pos_Best_Trip1));
+
+      BestPosXYZ = Pos_Best_Trip1;
+    }
+
+    // Move to the best IL position in trip 1 & 2
+    if (!isTrip3Jump)
+    {
+      int failCount = 0;
+      double preIL = Cal_PD_Input_IL(Get_PD_Points);
+
+      while (true)
+      {
+        if (isStop)
+          return true;
+
+        // Feed a step to close to the best IL position
+        if (deltaPos >= motorStep)
+        {
+          deltaPos = deltaPos - motorStep;
+
+          Move_Motor(DIR_Pin, STP_Pin, MotorCC, motorStep, delayBetweenStep, stableDelay); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
+
+          PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+          DataOutput(XYZ, PD_Now); // int xyz, double pdValue
+
+          if (PD_Now >= StopPDValue)
+          {
+            MSGOutput("StopPDValue");
+            break;
+          }
+          if (PD_Now >= PD_Best)
+          {
+            MSGOutput("Reach IL_Best before");
+            break;
+          }
+          if (preIL >= (PD_Best - 0.09) && preIL >= PD_Now)
+          {
+            MSGOutput("Over IL_Best before");
+            break;
+          }
+
+          if (PD_Now < preIL)
+            preIL++;
+          else
+            preIL = 0;
+
+          if (preIL >= 4)
+            break;
+
+          preIL = PD_Now;
+        }
+
+        // Feed final step to the best IL position
+        else if (deltaPos > 0 && deltaPos < motorStep)
+        {
+          Move_Motor(DIR_Pin, STP_Pin, MotorCC, deltaPos, delayBetweenStep, 0); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
+          PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+          DataOutput(XYZ, PD_Now); // int xyz, double pdValue
+          break;
+        }
+        else
+          break;
+      }
+    }
+    else
+    {
+      // Move_Motor(DIR_Pin, STP_Pin, MotorCC, deltaPos, delayBetweenStep, 100); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
+      // Move_Motor_abs(XYZ, BestPos); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
+      Move_Motor_abs_all(BestPosXYZ.X, BestPosXYZ.Y, BestPosXYZ.Z, delayBetweenStep); // Jump to Trip_1 start position
+
+      delay(300);
+      PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+      DataOutput(PD_Now);
+      DataOutput(XYZ, PD_Now); // int xyz, double pdValue
+      // MSGOutput("Trip 3 Jump : " + String(BestPos));
+      MSGOutput("Trip 3 Jump : " + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + "=" + String(PD_initial));
+    }
+  }
+
+  // PD_Now = Cal_PD_Input_IL(2*Get_PD_Points);
+  MSGOutput("Best IL: " + String(PD_Best));
+  MSGOutput("Final IL: " + String(PD_Now));
+
+  timer_2 = millis();
+  double ts = (timer_2 - timer_1) * 0.001;
+  CMDOutput("t:" + String(ts, 2));
+
+  isWiFiConnected = iniWifiStatus;
+
+  if (PD_Now < PD_Best - 0.5)
+    return false;
+  else
+    return true;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -1766,6 +3695,8 @@ void setup()
   DataSent_Server("ID?");
   Serial.println("isServerConnected:" + String(isWiFiConnected));
   isCheckingServer = false;
+
+  // tarPZ = Encoder_Motor_Step_X * tan(11.5 * (PI / 180));
 
   nowMillis_DataRec = millis();
 
@@ -3054,713 +4985,6 @@ bool AutoAlign_Spiral(int M, double StopValue, int stableDelay)
 #pragma endregion
 
   return false;
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-double maxIL_in_FineScan = 0;
-double minIL_in_FineScan = -100;
-
-bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
-                          bool Direction, int delayBetweenStep, double StopPDValue, int Get_PD_Points, int Trips, String msg)
-{
-  int DIR_Pin = 0; // 0:X, 1:Y, 2:Z
-  int STP_Pin = 0;
-  int backlash = 0;
-  MotorCC = Direction; // initial direction
-  int trip = 1;
-  int dataCount = 3;
-  int dataCount_ori;
-  int indexofBestIL = 0;
-  double PD_Value[4 * count + 1];
-  long Step_Value[4 * count + 1];
-  double Gradient_IL_Step[4 * count + 1];
-  int GradientDownCount = 0;
-  int GradientCount = 0;
-  bool isGradCountFixGauss = false;
-  double GradientTarget = 0.003; // default: 0.007
-  unsigned long timer_1 = 0, timer_2 = 0;
-  // delayBetweenStep = stableDelay;
-  timer_1 = millis();
-
-  dataCount = 2 * count + 1;
-  dataCount_ori = dataCount;
-
-  switch (XYZ)
-  {
-  case X_Dir:
-    DIR_Pin = X_DIR_Pin;
-    STP_Pin = X_STP_Pin;
-    backlash = X_backlash;
-    GradientTarget = FS_GradientTarget_X; // 0.003
-    delay(5);
-    break;
-  case Y_Dir:
-    DIR_Pin = Y_DIR_Pin;
-    STP_Pin = Y_STP_Pin;
-    backlash = Y_backlash;
-    GradientTarget = FS_GradientTarget_Y; // 0.002
-    delay(5);
-    break;
-  case Z_Dir:
-    DIR_Pin = Z_DIR_Pin;
-    STP_Pin = Z_STP_Pin;
-    backlash = Z_backlash;
-    GradientTarget = FS_GradientTarget_Z; // 0.003
-    delay(5);
-    break;
-  }
-
-  bool iniWifiStatus = isWiFiConnected;
-  if (!is_AutoCuring && Station_Type != 3)
-  {
-    isWiFiConnected = false;
-  }
-
-  MSGOutput("Scan Two Way");
-  MSGOutput("Scan Step: " + String(motorStep));
-  MSGOutput("StopValue:" + String(StopPDValue));
-  MSGOutput("Backlash: " + String(backlash));
-  MSGOutput("GradientTarget : " + String(GradientTarget, 4));
-  MSGOutput("isWiFiConnected : " + String(isWiFiConnected));
-  CMDOutput(">>" + msg + String(trip));
-
-  double PD_initial = Cal_PD_Input_IL(3);
-  MSGOutput("Initial PD: " + String(PD_initial));
-
-  maxIL_in_FineScan = PD_initial;
-  minIL_in_FineScan = PD_initial;
-
-  if (PD_initial >= StopPDValue)
-    return true;
-
-  //-------------------------------------------Jump to Trip_1 initial position-------------------------------------
-  digitalWrite(DIR_Pin, MotorCC);
-  delay(1);
-
-  if (true)
-  {
-    step(STP_Pin, motorStep * count, delayBetweenStep); // First Jump
-    delay(250);                                         // Default : 100
-    PD_Now = Cal_PD_Input_IL(Get_PD_Points);
-
-    DataOutput(PD_Now);
-    DataOutput(XYZ, PD_Now); // int xyz, double pdValue
-
-    Serial.println("Jump IL: " + String(PD_Now));
-  }
-  // else
-  // {
-  //   for (size_t i = 0; i < count; i++)
-  //   {
-  //     step(STP_Pin, motorStep, delayBetweenStep);
-  //     PD_Now = Cal_PD_Input_IL(Get_PD_Points);
-
-  //     if(PD_Now < (PD_initial - 3.5))
-  //     {
-  //       Serial.println("Jump IL < (IL - 3.5): " + String(PD_Now));
-  //       break;
-  //     }
-  //   }
-  // }
-
-  MotorCC = !MotorCC; // Reverse direction
-  digitalWrite(DIR_Pin, MotorCC);
-
-  delay(stableDelay + 5); // Default: 100
-
-  //-------------------------------------------------------Trip_1 -----------------------------------------------
-
-  if (PD_Now >= StopPDValue)
-  {
-    maxIL_in_FineScan = 0;
-    minIL_in_FineScan = -100;
-    return true;
-  }
-
-  for (int i = 0; i < dataCount; i++)
-  {
-    PD_Value[i] = 0;
-    Step_Value[i] = 0;
-  }
-
-  double IL_Best_Trip1 = PD_Now;
-  long Pos_Best_Trip1 = Get_Position(XYZ);
-  long Pos_Ini_Trip1 = Get_Position(XYZ);
-
-  double IL_Best_Trip = PD_Now;
-  long Pos_Best_Trip = Get_Position(XYZ);
-
-  int data_plus_time = 0;
-
-  for (int i = 0; i < dataCount; i++)
-  {
-    if (isStop)
-      return true;
-
-    if (i == 0)
-    {
-      PD_Value[i] = PD_Now;
-      Step_Value[i] = Get_Position(XYZ);
-      continue;
-    }
-
-    step(STP_Pin, motorStep, delayBetweenStep);
-    delay(stableDelay);
-
-    if (i > 1 && PD_Value[i - 1] > -2)
-      delay(30);
-
-    // 記錄IL
-    if (i > 0 && PD_Value[i - 1] > -2)
-      PD_Value[i] = Cal_PD_Input_IL(Get_PD_Points * 3); // 2500
-    else
-      PD_Value[i] = Cal_PD_Input_IL(Get_PD_Points);
-
-    // 記錄位置
-    Step_Value[i] = Get_Position(XYZ);
-
-    if (PD_Value[i] > IL_Best_Trip1)
-    {
-      indexofBestIL = i;
-      IL_Best_Trip1 = PD_Value[i];
-      Pos_Best_Trip1 = Get_Position(XYZ);
-    }
-
-    // Update Min, Max IL in Scan Process
-    if (PD_Value[i] > maxIL_in_FineScan)
-      maxIL_in_FineScan = PD_Value[i];
-    if (PD_Value[i] < minIL_in_FineScan)
-      minIL_in_FineScan = PD_Value[i];
-
-    DataOutput(PD_Value[i]);
-    DataOutput(XYZ, PD_Value[i]); // int xyz, double pdValue
-    // DataSent_Server("PD Power:" + String(PD_Value[i]));
-
-    // Gradient analyze
-    if (i > 0)
-    {
-      // 計算目前點斜率
-      Gradient_IL_Step[i - 1] = (PD_Value[i] - PD_Value[i - 1]) / (motorStep / MotorStepRatio);
-
-      if (XYZ == Z_Dir)
-      {
-        Gradient_IL_Step[i - 1] *= (FS_Steps_Z / FS_Steps_X);
-      }
-
-      if (Gradient_IL_Step[i - 1] <= (GradientTarget * -1))
-      {
-        GradientCount = 0;
-
-        GradientDownCount++;
-
-        // 曲線前半段正向上升，並已過最佳點
-        if (isGradCountFixGauss && PD_Value[i] > -4)
-        {
-          // Curfit
-          if (indexofBestIL != 0 && Pos_Best_Trip1 != Get_Position(XYZ))
-          {
-            double x[3];
-            double y[3];
-            for (int k = -1; k < 2; k++)
-            {
-              x[k + 1] = Step_Value[indexofBestIL + k]; // idex * step = real steps
-              y[k + 1] = PD_Value[indexofBestIL + k];   // fill this with your sensor data
-              // Serial.println("Point : " + String(x[k + 1]) + " , " + String(y[k + 1]));
-            }
-            Pos_Best_Trip1 = Curfit(x, y, 3);
-
-            MSGOutput("Best curfit IL position in Trip_1 is: " + String(Pos_Best_Trip1));
-          }
-
-          MSGOutput("Pass best IL");
-
-          break;
-        }
-
-        // 曲線反向下降
-        else if (GradientDownCount > 4 && IL_Best_Trip1 > -20)
-        {
-          // Curfit
-          if (indexofBestIL != 0 && Pos_Best_Trip1 != Get_Position(XYZ))
-          {
-            double x[3];
-            double y[3];
-            for (int k = -1; k < 2; k++)
-            {
-              x[k + 1] = Step_Value[indexofBestIL + k]; // idex * step = real steps
-              y[k + 1] = PD_Value[indexofBestIL + k];   // fill this with your sensor data
-              // Serial.println("Point : " + String(x[k + 1]) + " , " + String(y[k + 1]));
-            }
-            Pos_Best_Trip1 = Curfit(x, y, 3);
-
-            MSGOutput("Best curfit IL position in Trip_1 is: " + String(Pos_Best_Trip1));
-          }
-
-          MSGOutput("Back Direction");
-
-          break;
-        }
-      }
-      else
-      {
-        GradientCount++;
-        GradientDownCount = 0;
-
-        // 判斷圖形是否為順向曲線(擬合高斯)
-        if (GradientCount > 3 && !isGradCountFixGauss)
-          isGradCountFixGauss = true;
-      }
-
-      // 以連續正斜率並目前斜率在目標斜率範圍內，停止耦光 default: -2
-      if (i > 4 && PD_Value[i] > -3 && Gradient_IL_Step[i - 1] <= GradientTarget && GradientCount > 3)
-      {
-        MSGOutput("Gradient (" + String(Gradient_IL_Step[i - 1], 4) + ") <= Target : " + String(GradientTarget, 4));
-
-        if (XYZ == Z_Dir && GradientCount > 4)
-        {
-          MSGOutput("i:" + String(i) + ", Pos_Best_Trip1(Curfit):" + String(Pos_Best_Trip1));
-          double x[5];
-          double y[5];
-          for (int k = i - 4; k <= i; k++)
-          {
-            x[k - (i - 4)] = Step_Value[k]; // idex * step = real steps
-            y[k - (i - 4)] = PD_Value[k];   // fill this with your sensor data
-            // Serial.println("Point : " + String(x[k - (i - 4)]) + " , " + String(y[k - (i - 4)]));
-          }
-          Pos_Best_Trip1 = Curfit_2(x, y, 5);
-          MSGOutput("Best pos in Trip_1 (curfit) is: " + String(Pos_Best_Trip1));
-        }
-
-        DataOutput(PD_Value[i]);
-
-        timer_2 = millis();
-        double ts = (timer_2 - timer_1) * 0.001;
-        CMDOutput("t:" + String(ts, 2));
-
-        isWiFiConnected = iniWifiStatus;
-
-        return true;
-      }
-
-      // else if (i > 5 && PD_Value[i] > -8 && GradientCount > 4 && Pos_Best_Trip1 == Get_Position(XYZ))
-      // {
-      //   // Curfit
-      //   Serial.println("Curfit Jump");
-
-      //   double x[5];
-      //   double y[5];
-      //   for (int k = -4; k <= 0; k++)
-      //   {
-      //     x[k + 4] = Step_Value[indexofBestIL + k]; // idex * step = real steps
-      //     y[k + 4] = PD_Value[indexofBestIL + k];   // fill this with your sensor data
-      //     Serial.println("Point : " + String(x[k + 4]) + " , " + String(y[k + 4]));
-      //   }
-      //   double Pre_Pos_Best_Trip1 = Curfit(x, y, 5);
-
-      //   MSGOutput("Curfit Predict Best IL pos in Trip_1 is: " + String(Pre_Pos_Best_Trip1));
-
-      //   timer_2 = millis();
-      //   double ts = (timer_2 - timer_1) * 0.001;
-      //   CMDOutput("t:" + String(ts, 2));
-
-      //   isWiFiConnected = iniWifiStatus;
-
-      //   return true;
-      // }
-    }
-
-    // 結束Trip 1, 進行curfitting
-    if (IL_Best_Trip1 >= -2 && PD_Value[i] <= (IL_Best_Trip1 - 1.5) && Trips == 1 && i > 4)
-    {
-      Serial.println("IL < (IL-1.5): " + String(PD_Value[i]));
-
-      // Curfit
-      if (indexofBestIL != 0 && Pos_Best_Trip1 != Get_Position(XYZ))
-      {
-        double x[3];
-        double y[3];
-        for (int k = -1; k < 2; k++)
-        {
-          x[k + 1] = Step_Value[indexofBestIL + k]; // idex * step = real steps
-          y[k + 1] = PD_Value[indexofBestIL + k];   // fill this with your sensor data
-          // Serial.println("Point : " + String(x[k + 1]) + " , " + String(y[k + 1]));
-        }
-        Pos_Best_Trip1 = Curfit(x, y, 3);
-
-        MSGOutput("Best curfit IL position in Trip_1 is: " + String(Pos_Best_Trip1));
-      }
-
-      break;
-    }
-
-    // IL 大於 Stop threshold 判斷
-    if (PD_Value[i] >= StopPDValue)
-    {
-      MSGOutput("Better than StopValue");
-      return true;
-    }
-
-    if (Trips == 0 && i > 3)
-    {
-      if ((PD_Value[i] <= PD_Value[i - 1] || abs(PD_Value[i] - PD_Value[i - 1]) <= 0.02) && PD_Value[i] >= -1.8)
-      {
-        MSGOutput("Over best IL in trip 1");
-        PD_Now = Cal_PD_Input_IL(2 * Get_PD_Points);
-        MSGOutput("Final IL: " + String(PD_Now));
-        timer_2 = millis();
-        double ts = (timer_2 - timer_1) * 0.001;
-        CMDOutput("t:" + String(ts, 2));
-        DataOutput(PD_Now);
-        return true;
-      }
-    }
-
-    // 擴增點數
-    if (i == (dataCount - 1) && Pos_Best_Trip1 == Get_Position(XYZ))
-    {
-      Serial.println("Datacount+3");
-      dataCount = dataCount + 3;
-      data_plus_time = data_plus_time + 1;
-
-      motorStep *= 2;
-
-      if (dataCount - dataCount_ori > 20 || data_plus_time > 5)
-      {
-        Serial.println("Data plus time: " + String(data_plus_time));
-        timer_2 = millis();
-        double ts = (timer_2 - timer_1) * 0.001;
-        CMDOutput("t:" + String(ts, 2));
-
-        return true;
-      }
-    }
-
-    // 結束Trip 1, 進行curfitting
-    else if (indexofBestIL != 0 && i == (dataCount - 1) && Pos_Best_Trip1 != Get_Position(XYZ))
-    {
-      // MSGOutput("i:" + String(i) + ", Pos_Best_Trip1:" + String(Pos_Best_Trip1));
-      double x[3];
-      double y[3];
-      for (int k = -1; k < 2; k++)
-      {
-        x[k + 1] = Step_Value[indexofBestIL + k]; // idex * step = real steps
-        y[k + 1] = PD_Value[indexofBestIL + k];   // fill this with your sensor data
-        // Serial.println("Point : " + String(x[k + 1]) + " , " + String(y[k + 1]));
-      }
-      Pos_Best_Trip1 = Curfit(x, y, 3);
-      MSGOutput("Best curfit IL position in Trip_1 is: " + String(Pos_Best_Trip1));
-    }
-  }
-
-  trip++;
-
-  double IL_Best_Trip2 = 0;
-  long Pos_Best_Trip2 = 0;
-  long Pos_Ini_Trip2 = 0;
-
-  //------------------------------------------------------Trip_2 ------------------------------------------------------------
-  MSGOutput(" --- Trip 2 --- ");
-  MSGOutput("Trip Now: " + String(trip) + ", Trips Setting: " + String(Trips));
-
-  GradientCount = 0;
-
-  if (Trips != 1)
-  {
-    CMDOutput("~:" + msg + String(trip));
-
-    IL_Best_Trip2 = PD_Now;
-    Pos_Best_Trip2 = Get_Position(XYZ);
-    Pos_Ini_Trip2 = Get_Position(XYZ);
-
-    for (int i = 0; i < dataCount; i++)
-    {
-      PD_Value[i] = 0;
-      Step_Value[i] = 0;
-    }
-
-    MotorCC = !MotorCC; // Reverse direction
-    digitalWrite(DIR_Pin, MotorCC);
-    delay(5);
-
-    for (int i = 0; i < dataCount; i++)
-    {
-      if (isStop)
-      {
-        Serial.println("Emergency Stop");
-        return true;
-      }
-
-      if (i == 0)
-      {
-        PD_Value[i] = PD_Now;
-        Step_Value[i] = Get_Position(XYZ);
-        continue;
-      }
-
-      step(STP_Pin, motorStep, delayBetweenStep);
-      delay(stableDelay);
-
-      if (i > 1 && PD_Value[i - 1] > -2)
-        delay(30);
-
-      PD_Value[i] = Cal_PD_Input_IL(Get_PD_Points);
-      Step_Value[i] = Get_Position(XYZ);
-
-      if (PD_Value[i] > IL_Best_Trip2)
-      {
-        indexofBestIL = i;
-        IL_Best_Trip2 = PD_Value[i];
-        Pos_Best_Trip2 = Get_Position(XYZ);
-      }
-
-      // Update Min, Max IL in Scan Process
-      if (PD_Value[i] > maxIL_in_FineScan)
-        maxIL_in_FineScan = PD_Value[i];
-      if (PD_Value[i] < minIL_in_FineScan)
-        minIL_in_FineScan = PD_Value[i];
-
-      DataOutput(PD_Value[i]);
-      DataOutput(XYZ, PD_Value[i]); // int xyz, double pdValue
-      DataSent_Server("PD Power:" + String(PD_Value[i]));
-
-      // Gradient analyze
-      if (i > 0)
-      {
-        Gradient_IL_Step[i - 1] = (PD_Value[i] - PD_Value[i - 1]) / motorStep;
-
-        if (Gradient_IL_Step[i - 1] <= -0.01)
-          GradientCount = 0;
-        else
-          GradientCount++;
-
-        if (i > 3)
-        {
-          if (PD_Value[i] > -1.35 && Gradient_IL_Step[i - 1] <= GradientTarget && GradientCount > 3 && PD_Value[i] >= IL_Best_Trip1)
-          {
-            MSGOutput("Gradient (" + String(Gradient_IL_Step[i - 1], 4) + ") <= Target : " + String(GradientTarget, 4));
-
-            timer_2 = millis();
-            double ts = (timer_2 - timer_1) * 0.001;
-            CMDOutput("t:" + String(ts, 2));
-
-            isWiFiConnected = iniWifiStatus;
-
-            return true;
-          }
-        }
-      }
-
-      if (IL_Best_Trip1 >= -2.5 && PD_Value[i] <= (IL_Best_Trip1 - 1.5) && Trips == 1)
-      {
-        Serial.println("IL < (IL-1.5): " + String(PD_Value[i]));
-        break;
-      }
-
-      if (PD_Value[i] >= StopPDValue)
-      {
-        MSGOutput("Better than StopValue");
-        return true;
-      }
-
-      if (indexofBestIL != 0 && i == (dataCount - 1) && Pos_Best_Trip2 != Get_Position(XYZ))
-      {
-        double x[3];
-        double y[3];
-        for (int k = -1; k < 2; k++)
-        {
-          x[k + 1] = Step_Value[indexofBestIL + k]; // idex * step = real steps
-          y[k + 1] = PD_Value[indexofBestIL + k];   // fill this with your sensor data
-          MSGOutput("Point : " + String(x[k + 1]) + " , " + String(y[k + 1]));
-        }
-        Pos_Best_Trip2 = Curfit(x, y, 3);
-        MSGOutput("Best IL position in Trip_2 is: " + String(Pos_Best_Trip2));
-      }
-    }
-  }
-  else
-    trip--;
-
-  trip++;
-  CMDOutput("~:" + msg + String(trip));
-
-  //------------------------------------Trip_3 -------------------------------------------------------
-
-  MSGOutput(" --- Trip 3 --- ");
-
-  double PD_Best = IL_Best_Trip1;
-  int deltaPos = 0;
-  int BestPos = 0;
-
-  if (true)
-  {
-    // Best IL in Trip 2
-    if (IL_Best_Trip2 > IL_Best_Trip1 && (IL_Best_Trip2 - IL_Best_Trip1) > 0.05 && Trips != 1)
-    {
-      if (isStop)
-        return true;
-
-      MotorCC = !MotorCC; // Reverse direction
-      digitalWrite(DIR_Pin, MotorCC);
-      delay(15);
-
-      MSGOutput("Best pos in Trip_2 : " + String(Pos_Best_Trip2)); //------------Best in Trip_2----------------
-
-      if (XYZ == 2)
-        Pos_Best_Trip2 = Pos_Best_Trip2 - (AQ_Scan_Compensation_Steps_Z_A * MotorStepRatio);
-
-      MSGOutput("Best pos in Trip_2 (Compensation) : " + String(Pos_Best_Trip2));
-
-      PD_Best = IL_Best_Trip2;
-
-      BestPos = Pos_Best_Trip2;
-    }
-
-    else //------------Best in Trip_1----------------
-    {
-      MSGOutput("Best in Trip_1 : " + String(Pos_Best_Trip1));
-      MSGOutput("Position Now : " + String(Get_Position(XYZ)));
-
-      if (Pos_Best_Trip1 == Get_Position(XYZ))
-      {
-        PD_Now = Cal_PD_Input_IL(2 * Get_PD_Points);
-
-        timer_2 = millis();
-        double ts = (timer_2 - timer_1) * 0.001;
-        CMDOutput("t:" + String(ts, 2));
-
-        if (abs(PD_Now - IL_Best_Trip1) <= 0.12 || PD_Now > IL_Best_Trip1)
-          return true;
-        else
-          return false;
-      }
-
-      // Best IL in Trip 1 and Trip setting is 1
-      if (Trips == 1)
-      {
-        // MotorCC = !MotorCC; // Reverse direction
-        // digitalWrite(DIR_Pin, MotorCC);
-        // delay(15);
-
-        MSGOutput("Jump to Trip Initial Pos : " + String(Pos_Ini_Trip1));
-        Move_Motor_abs(XYZ, Pos_Ini_Trip1); // Jump to Trip_1 start position
-
-        // MSGOutput("Jump Backlash : " + String(backlash));
-        // step(STP_Pin, backlash, delayBetweenStep);
-
-        delay(300); // 100
-
-        PD_Now = Cal_PD_Input_IL(Get_PD_Points);
-        DataOutput(PD_Now);
-        DataOutput(XYZ, PD_Now); // int xyz, double pdValue
-
-        // MotorCC = !MotorCC; // Reverse direction
-        // digitalWrite(DIR_Pin, MotorCC);
-        // delay(5);
-
-        // deltaPos = abs(Pos_Best_Trip1 - Get_Position(XYZ));
-        // MSGOutput("deltaPos : " + String(deltaPos));
-
-        // MSGOutput("Best in Trip_1 : " + String(Pos_Best_Trip1));
-
-        // BestPos = Pos_Best_Trip1;
-      }
-
-      // if (XYZ == 2)
-      //   Pos_Best_Trip1 = Pos_Best_Trip1 - (AQ_Scan_Compensation_Steps_Z_A * MotorStepRatio);
-
-      MSGOutput("Best in Trip_1 (Compensation) : " + String(Pos_Best_Trip1));
-
-      BestPos = Pos_Best_Trip1;
-    }
-
-    // Move to the best IL position in trip 1 & 2
-    if (!isTrip3Jump)
-    {
-      int failCount = 0;
-      double preIL = Cal_PD_Input_IL(Get_PD_Points);
-
-      while (true)
-      {
-        if (isStop)
-          return true;
-
-        // Feed a step to close to the best IL position
-        if (deltaPos >= motorStep)
-        {
-          deltaPos = deltaPos - motorStep;
-
-          Move_Motor(DIR_Pin, STP_Pin, MotorCC, motorStep, delayBetweenStep, stableDelay); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
-
-          PD_Now = Cal_PD_Input_IL(Get_PD_Points);
-          DataOutput(XYZ, PD_Now); // int xyz, double pdValue
-
-          if (PD_Now >= StopPDValue)
-          {
-            MSGOutput("StopPDValue");
-            break;
-          }
-          if (PD_Now >= PD_Best)
-          {
-            MSGOutput("Reach IL_Best before");
-            break;
-          }
-          if (preIL >= (PD_Best - 0.09) && preIL >= PD_Now)
-          {
-            MSGOutput("Over IL_Best before");
-            break;
-          }
-
-          if (PD_Now < preIL)
-            preIL++;
-          else
-            preIL = 0;
-
-          if (preIL >= 4)
-            break;
-
-          preIL = PD_Now;
-        }
-
-        // Feed final step to the best IL position
-        else if (deltaPos > 0 && deltaPos < motorStep)
-        {
-          Move_Motor(DIR_Pin, STP_Pin, MotorCC, deltaPos, delayBetweenStep, 0); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
-          PD_Now = Cal_PD_Input_IL(Get_PD_Points);
-          DataOutput(XYZ, PD_Now); // int xyz, double pdValue
-          break;
-        }
-        else
-          break;
-      }
-    }
-    else
-    {
-      // Move_Motor(DIR_Pin, STP_Pin, MotorCC, deltaPos, delayBetweenStep, 100); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
-      Move_Motor_abs(XYZ, BestPos); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
-      delay(300);
-      PD_Now = Cal_PD_Input_IL(Get_PD_Points);
-      DataOutput(PD_Now);
-      DataOutput(XYZ, PD_Now); // int xyz, double pdValue
-      MSGOutput("Trip 3 Jump : " + String(BestPos));
-    }
-  }
-
-  // PD_Now = Cal_PD_Input_IL(2*Get_PD_Points);
-  MSGOutput("Best IL: " + String(PD_Best));
-  MSGOutput("Final IL: " + String(PD_Now));
-
-  timer_2 = millis();
-  double ts = (timer_2 - timer_1) * 0.001;
-  CMDOutput("t:" + String(ts, 2));
-
-  isWiFiConnected = iniWifiStatus;
-
-  if (PD_Now < PD_Best - 0.5)
-    return false;
-  else
-    return true;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -5354,6 +6578,8 @@ int Function_Classification(String cmd, int ButtonSelected)
         cmd.remove(0, 2); // Include empty char deleted
         Encoder_Motor_Step_X = cmd.toInt();
         WR_EEPROM(EP_Encoder_Motor_Step_X, cmd);
+
+        // tarPZ = Encoder_Motor_Step_X * tan(11.5 * (PI / 180));
       }
       else if (Contains(cmd, "Y"))
       {
@@ -6509,7 +7735,7 @@ int Function_Excecutation(String cmd, int cmd_No)
           //   i = 152;
           // }
           // else
-          MSGOutput("EEPROM(" + String(i) + ") - " + ReadInfoEEPROM(i, 8)); // Reading EEPROM(int start_position, int data_length)
+          MSGOutput("EPRM(" + String(i) + ") - " + ReadInfoEEPROM(i, 8)); // Reading EEPROM(int start_position, int data_length)
         }
 
       case 29: /* Get XYZ Position */
@@ -6830,6 +8056,10 @@ int Function_Excecutation(String cmd, int cmd_No)
         int StopValueC;
         int Get_PD_Points;
         int Trips;
+        double SlopeC;
+        double Tilt_XC;
+        double Tilt_YC;
+        double Tilt_ZC;
 
         XYZ = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')).toInt();
         Serial.println("XYZ:" + Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_'))); // xyz
@@ -6840,7 +8070,7 @@ int Function_Excecutation(String cmd, int cmd_No)
         Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
 
         motorStepC = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')).toInt();
-        Serial.println("StopValue:" + Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_'))); // step
+        Serial.println("motorStepC:" + Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_'))); // step
         Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
 
         stableDelay = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')).toInt();
@@ -6864,17 +8094,52 @@ int Function_Excecutation(String cmd, int cmd_No)
         Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
 
         Trips = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')).toInt();
-        Serial.println("Trips:" + Txt_LineScanSetting); // trips
+        Serial.println("Trips:" + Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_'))); // trips
         Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
+
+        if (Txt_LineScanSetting != "")
+        {
+          SlopeC = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')).toDouble();
+          Serial.println("Slope:" + Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_'))); // Slope
+          Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
+        }
+
+        if (Txt_LineScanSetting != "")
+        {
+          Tilt_XC = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')).toDouble();
+          Serial.println("Tilt_X:" + Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_'))); // Tilt_X
+          Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
+        }
+
+        if (Txt_LineScanSetting != "")
+        {
+          Tilt_YC = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')).toDouble();
+          Serial.println("Tilt_Y:" + Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_'))); // Tilt_Y
+          Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
+        }
+
+        if (Txt_LineScanSetting != "")
+        {
+          Tilt_ZC = Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_')).toDouble();
+          Serial.println("Tilt_Z:" + Txt_LineScanSetting.substring(0, Txt_LineScanSetting.indexOf('_'))); // Tilt_Z
+          Txt_LineScanSetting.remove(0, Txt_LineScanSetting.indexOf('_') + 1);
+        }
+
+        isMotorManualCtr = false;
 
         msg = "Manual_Fine_Scan_Trip_";
 
+        // return 0;
+
         CMDOutput("AS");
 
-        Scan_AllRange_TwoWay(XYZ, count, motorStepC * MotorStepRatio, stableDelay,
-                             Direction, delayBetweenStep, StopValueC, Get_PD_Points, Trips, msg);
+        Line_Scan_3D(XYZ, count, motorStepC * MotorStepRatio, stableDelay,
+                     Direction, delayBetweenStep, StopValueC, Get_PD_Points, Trips, msg,
+                     SlopeC, Tilt_XC, Tilt_YC, Tilt_ZC);
 
         CMDOutput("%:");
+
+        isMotorManualCtr = true;
 
         // if (!)
         // {
@@ -6935,13 +8200,13 @@ int Function_Excecutation(String cmd, int cmd_No)
         Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
 
         Z_Steps = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toInt();
-        Serial.println("Z_Steps:" + Txt_SpiralSetting); // Z_Steps
+        Serial.println("Z_Steps:" + Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_'))); // Z_Steps
         Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
 
         if (Txt_SpiralSetting != "")
         {
           int stp = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toInt();
-          Serial.println("spiral type:" + Txt_SpiralSetting); // spiral type
+          Serial.println("spiral type:" + Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_'))); // spiral type
           Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
 
           if (stp == 0)
@@ -6955,7 +8220,7 @@ int Function_Excecutation(String cmd, int cmd_No)
         if (Txt_SpiralSetting != "")
         {
           String sprPlane = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_'));
-          Serial.println("spiral plane:" + Txt_SpiralSetting); // spiral type
+          Serial.println("spiral plane:" + Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_'))); // spiral type
           Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
 
           if (sprPlane == "XY")
@@ -6971,37 +8236,41 @@ int Function_Excecutation(String cmd, int cmd_No)
         if (Txt_SpiralSetting != "")
         {
           AngleSteps = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toInt();
-          Serial.println("spiral angle gap:" + Txt_SpiralSetting);
+          Serial.println("spiral angle gap:" + Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')));
           Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
         }
 
         if (Txt_SpiralSetting != "")
         {
           ScanTilt_X = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toDouble();
-          Serial.println("spiral scan tilt x:" + Txt_SpiralSetting);
+          Serial.println("spiral scan tilt x:" + Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')));
           Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
         }
 
         if (Txt_SpiralSetting != "")
         {
           ScanTilt_Y = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toDouble();
-          Serial.println("spiral scan tilt y:" + Txt_SpiralSetting);
+          Serial.println("spiral scan tilt y:" + Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')));
           Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
         }
 
         if (Txt_SpiralSetting != "")
         {
           ScanTilt_Z = Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')).toDouble();
-          Serial.println("spiral scan tilt z:" + Txt_SpiralSetting);
+          Serial.println("spiral scan tilt z:" + Txt_SpiralSetting.substring(0, Txt_SpiralSetting.indexOf('_')));
           Txt_SpiralSetting.remove(0, Txt_SpiralSetting.indexOf('_') + 1);
         }
 
         Txt_SpiralSetting = "";
 
+        // return 0;
+
 #pragma endregion
 
-        digitalWrite(Tablet_PD_mode_Trigger_Pin, false); // false is PD mode, true is Servo mode
-        delay(5);
+        // digitalWrite(Tablet_PD_mode_Trigger_Pin, false); // false is PD mode, true is Servo mode
+        // delay(5);
+
+        isMotorManualCtr = false;
 
 #pragma region Rectangular Spiral
 
@@ -7040,6 +8309,8 @@ int Function_Excecutation(String cmd, int cmd_No)
           CMDOutput("X^");
           // Serial.println("X^");
 
+          isMotorManualCtr = true;
+
           return 0;
         }
 
@@ -7051,6 +8322,15 @@ int Function_Excecutation(String cmd, int cmd_No)
         {
           CMDOutput("AS"); // 清除UI前一筆資訊
           MSGOutput("Spiral Start");
+
+          Serial.println("Tilt x:" + String(ScanTilt_X));
+          Serial.println("Tilt y:" + String(ScanTilt_Y));
+          Serial.println("Tilt z:" + String(ScanTilt_Z));
+          PD_Now = Cal_PD_Input_Row_Dac(1);
+          // Serial.println("IL :" + String(PD_Now));
+          Get_PD_Points = 1;
+          Serial.println("Pos : " + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + "=" + String(PD_Now));
+
           CMDOutput("^X"); // 2D scan start msg for UI
 
           long R = 40;
@@ -7070,8 +8350,10 @@ int Function_Excecutation(String cmd, int cmd_No)
           // Initial Pos
           // Move_Motor(X_DIR_Pin, X_STP_Pin, true, R, 20, 100);
 
-          // Rotation Matrix
+          // Target position Matrix
           BLA::Matrix<3, 1> M_A;
+
+          // Rotation Matrix
           BLA::Matrix<3, 3> M_X;
           BLA::Matrix<3, 3> M_Y;
           BLA::Matrix<3, 3> M_Z;
@@ -7089,43 +8371,82 @@ int Function_Excecutation(String cmd, int cmd_No)
           {
 
             {
-              long Targ_X = OriginalPos.X;
-              long Targ_Y = OriginalPos.Y;
-              long Targ_Z = OriginalPos.Z;
+              // long Targ_X = OriginalPos.X;
+              // long Targ_Y = OriginalPos.Y;
+              // long Targ_Z = OriginalPos.Z;
+
+              long Targ_X = 0;
+              long Targ_Y = 0;
+              long Targ_Z = 0;
+
               // long Targ_X = R * (cos(i * (PI / 180.0)) + OriginalPos.X);
               // long Targ_Y = R * (cos(i * (PI / 180.0))) + OriginalPos.Y;
               // long Targ_Z = R * (sin(i * (PI / 180.0))) + OriginalPos.Z;
 
+              // 分量計算
               if (spiPlane == XY)
               {
-                Targ_X = R * (sin(i * (PI / 180.0))) + Targ_X;
-                Targ_Y = R * (cos(i * (PI / 180.0))) + Targ_Y;
+                Targ_X = R * (sin(i * (PI / 180.0)));
+                Targ_Y = R * (cos(i * (PI / 180.0)));
               }
               else if (spiPlane == YZ)
               {
-                Targ_Y = R * (cos(i * (PI / 180.0))) + Targ_Y;
-                Targ_Z = R * (sin(i * (PI / 180.0))) + Targ_Z;
+                Targ_Y = R * (cos(i * (PI / 180.0)));
+                Targ_Z = R * (sin(i * (PI / 180.0)));
               }
               else if (spiPlane == XZ)
               {
-                Targ_X = R * (cos(i * (PI / 180.0))) + Targ_X;
-                Targ_Z = R * (sin(i * (PI / 180.0))) + Targ_Z;
+                Targ_X = R * (cos(i * (PI / 180.0)));
+                Targ_Z = R * (sin(i * (PI / 180.0)));
               }
+
+              // if (i % 20 == 0)
+              //   Serial.println("TargS : " + String(Targ_X) + "," + String(Targ_Y) + "," + String(Targ_Z));
 
               M_A = {Targ_X, Targ_Y, Targ_Z};
 
+              // 旋轉
               BLA::Matrix<3, 1> M = M_X * M_Y * M_Z * M_A;
 
               Targ_X = M(0);
               Targ_Y = M(1);
               Targ_Z = M(2);
 
+              // if (i % 20 == 0)
+              //   Serial.println("TargS : " + String(Targ_X) + "," + String(Targ_Y) + "," + String(Targ_Z));
+
+              // 加上初始點位移量
+              Targ_X += OriginalPos.X;
+              Targ_Y += OriginalPos.Y;
+              Targ_Z += OriginalPos.Z;
+
+              // if (i % 20 == 0)
+              //   Serial.println("TargM : " + String(Targ_X) + "," + String(Targ_Y) + "," + String(Targ_Z));
+
+              // if (spiPlane == XY)
+              // {
+              //   Targ_X = Targ_X;
+              //   Targ_Y = R * (cos(i * (PI / 180.0))) + Targ_Y;
+              // }
+              // else if (spiPlane == YZ)
+              // {
+              //   Targ_Y = R * (cos(i * (PI / 180.0))) + Targ_Y;
+              //   Targ_Z = R * (sin(i * (PI / 180.0))) + Targ_Z;
+              // }
+              // else if (spiPlane == XZ)
+              // {
+              //   Targ_X = R * (cos(i * (PI / 180.0))) + Targ_X;
+              //   Targ_Z = R * (sin(i * (PI / 180.0))) + Targ_Z;
+              // }
+
               Move_Motor_abs_all(Targ_X, Targ_Y, Targ_Z, delay_btw_steps);
 
               if (stableDelay > 0)
                 delay(stableDelay);
 
-              PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+              // PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+              // PD_Now = Cal_PD_Input_Row_Dac(Get_PD_Points);
+              PD_Now = Cal_PD_Input_Row_Dac(1);
 
               if (PD_Now > BestIL)
               {
@@ -7135,11 +8456,16 @@ int Function_Excecutation(String cmd, int cmd_No)
                 BestPos.Z = Pos_Now.Z;
               }
 
+              if (PD_Now >= StopPDValue)
+                break;
+
               if (i % 20 == 0)
               {
-                CMDOutput("*[" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + "]=" + PD_Now);
+                CMDOutput("*[" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + "]=" + String(PD_Now));
                 // MSGOutput("Ang:" + String(i) + ", Pos:" + String(Targ_X) + "," + String(Targ_Y) + "," + String(Targ_Z));
               }
+
+              // break;
 
               R += motorStep;
             }
@@ -7149,13 +8475,19 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
 
           // Back to center position
+          Serial.println("To best position");
           Move_Motor_abs_all(BestPos.X, BestPos.Y, BestPos.Z);
+
+          PD_Now = Cal_PD_Input_Row_Dac(Get_PD_Points);
+          Serial.println("Best : " + String(BestPos.X) + "," + String(BestPos.Y) + "," + String(BestPos.Z) + "=" + String(PD_Now));
 
           DataOutput(false);
 
           MSGOutput("Spiral End");
 
-          digitalWrite(Tablet_PD_mode_Trigger_Pin, true); // false is PD mode, true is Servo mode
+          isMotorManualCtr = true;
+
+          // digitalWrite(Tablet_PD_mode_Trigger_Pin, true); // false is PD mode, true is Servo mode
 
           return 0;
         }
@@ -7319,6 +8651,46 @@ long Get_Position(int xyz)
     return Pos_Now.Z;
     break;
   }
+}
+
+// void Get_Position(struct_Motor_Pos Pos)
+// {
+//   Pos.X = Pos_Now.X;
+//   Pos.Y = Pos_Now.Y;
+//   Pos.Z = Pos_Now.Z;
+// }
+
+struct_Motor_Pos Get_Position()
+{
+  struct_Motor_Pos smp;
+  smp.X = Pos_Now.X;
+  smp.Y = Pos_Now.Y;
+  smp.Z = Pos_Now.Z;
+
+  return smp;
+}
+
+long Get_1_Position(struct_Motor_Pos Pos, int xyz)
+{
+  if (xyz == 0)
+    return Pos.X;
+  else if (xyz == 1)
+    return Pos.Y;
+  else if (xyz == 2)
+    return Pos.Z;
+}
+
+bool Compare_Position(struct_Motor_Pos Pos1, struct_Motor_Pos Pos2)
+{
+  if (Pos1.X == Pos2.X && Pos1.Y == Pos2.Y && Pos1.Z == Pos2.Z)
+    return true;
+  else
+    return false;
+}
+
+String Show_Position(struct_Motor_Pos Pos)
+{
+  return String(Pos.X) + "," + String(Pos.Y) + "," + String(Pos.Z);
 }
 
 void MSGOutput(String msg)
