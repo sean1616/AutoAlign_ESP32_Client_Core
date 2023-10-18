@@ -5,93 +5,12 @@
 #include <Wire.h>
 #include <Adafruit_ADS1X15.h>
 #include <BasicLinearAlgebra.h>
+#include "config.h"
 
 using namespace BLA;
 
 TaskHandle_t Task_1, Task_2;
 #define WDT_TIMEOUT 3
-
-// String server_ID, server_Password;
-
-bool isWiFiConnected = false;
-bool isCheckingServer = false;
-
-String ID = "003";
-String Station_ID = "A00";
-
-/// @brief 0 is CTF, 1 is VOA-Heater, 2 is VOA-No Heater, 3 is 3D Switch
-byte Station_Type = 0;
-
-const byte X_STP_Pin = 15; // x軸 步進控制Pulse
-const byte X_DIR_Pin = 2;  // X軸 步進馬達方向控制
-const byte Y_STP_Pin = 5;  // y軸 步進控制Pulse (Pin 0 is for boot) 0 => 5
-const byte Y_DIR_Pin = 18; // y軸 步進馬達方向控制 4 => 18
-const byte Z_STP_Pin = 16; // z軸 步進控制Pulse
-const byte Z_DIR_Pin = 17; // z軸 步進馬達方向控制
-
-int ButtonSelected = 0;
-
-const byte Heater_Start_Pin = 12;
-const byte Heater_Stop_Pin = 14;
-
-// pin = 13
-int Tablet_PD_mode_Trigger_Pin = 13;
-
-Adafruit_ADS1115 ads;
-TwoWire I2CADS = TwoWire(1);
-
-#define I2C_SDA 21 // 21
-#define I2C_SCL 22 // 22
-
-int MotorDir_Pin = 0;
-int MotorSTP_Pin = 0;
-bool MotorCC = false;
-bool MotorCC_X = false;
-bool MotorCC_Y = false;
-bool MotorCC_Z = false;
-
-double MotorStepRatio = 1;
-double MotorStepDelayRatio = 1;
-int delayBetweenStep = 600;
-int delayBetweenStep_X = 8;
-int delayBetweenStep_Y = 8;
-int delayBetweenStep_Z = 8;
-int MinMotorDelayTime = 320;
-long MinMotroStep = 20;
-int M_Level = 10;
-
-/// @brief 1: button,  2: cmd, 3:controller btn
-byte Motor_Continous_Mode = 2;
-
-typedef struct struct_Motor_Pos
-{
-  long X = 0;
-  long Y = 0;
-  long Z = 0;
-} struct_Motor_Pos;
-
-struct_Motor_Pos Pos_Now;
-
-int xyz = 0;
-long X_Pos_Record = 0;
-long Y_Pos_Record = 0;
-long Z_Pos_Record = 0;
-long X_Pos_Now = 0;
-long Y_Pos_Now = 0;
-long Z_Pos_Now = 0;
-long Z_Pos_reLoad = 0;
-
-int X_backlash = 0;
-int Y_backlash = 0;
-int Z_backlash = 0;
-
-int X_ScanSTP = 12;
-int Y_ScanSTP = 10;
-int Z_ScanSTP = 200;
-
-int X_ScanStable = 25;
-int Y_ScanStable = 50;
-int Z_ScanStable = 80;
 
 typedef struct struct_AlignResult
 {
@@ -102,217 +21,6 @@ typedef struct struct_AlignResult
 } struct_AlignResult;
 
 struct_AlignResult AlignResult;
-
-// Intention _ Region _ MotionType _ ParaType _ Axis _ Rank = Value
-int AA_SpiralRough_Feed_Steps_Z_A = 25000;
-int AA_SpiralRough_Spiral_Steps_XY_A = 2000;
-int AA_SpiralFine_Spiral_Steps_XY_A = 1500;
-int AA_SpiralFine_Scan_Steps_X_A = 25;
-int AA_SpiralFine_Scan_Steps_X_B = 30;
-int AA_SpiralFine_Scan_Steps_X_C = 40;
-int AA_SpiralFine_Scan_Steps_X_D = 50;
-int AA_SpiralFine_Scan_Steps_Y_A = 30;
-int AA_SpiralFine_Scan_Steps_Y_B = 40;
-int AA_SpiralFine_Scan_Steps_Y_C = 60;
-int AA_SpiralFine_Scan_Steps_Y_D = 80;
-int AA_SpiralFine_Scan_Steps_Y_E = 140;
-int AA_ScanRough_Feed_Steps_Z_A = 10000;
-int AA_ScanRough_Feed_Steps_Z_B = 500;
-double AA_ScanRough_Feed_Ratio_Z_A = 5;   // 2.8
-double AA_ScanRough_Feed_Ratio_Z_B = 4;   // 2.5
-double AA_ScanRough_Feed_Ratio_Z_C = 3;   // 2.0
-double AA_ScanRough_Feed_Ratio_Z_D = 1.5; // 1.5
-int AA_ScanRough_Scan_Steps_Y_A = 25;
-int AA_ScanRough_Scan_Steps_Y_B = 30;
-int AA_ScanRough_Scan_Steps_Y_C = 40;
-int AA_ScanRough_Scan_Steps_Y_D = 70;
-int AA_ScanRough_Scan_Steps_X_A = 25;
-int AA_ScanRough_Scan_Steps_X_B = 30;
-int AA_ScanRough_Scan_Steps_X_C = 80;
-int AA_ScanRough_Scan_Steps_X_D = 100;
-int AA_ScanRough_Scan_Steps_X_E = 120;
-int AA_ScanFine_Scan_Steps_Z_A = 200;
-int AA_ScanFine_Scan_Steps_Y_A = 20;
-int AA_ScanFine_Scan_Steps_X_A = 20;
-int AA_ScanFinal_Scan_Steps_Z_A = 125;
-int AA_ScanFinal_Scan_Steps_Y_A = 20;
-int AA_ScanFinal_Scan_Steps_X_A = 20;
-
-int AQ_Scan_Compensation_Steps_Z_A = 12;
-int AQ_Scan_Steps_Z_A = 130;
-int AQ_Scan_Steps_Z_B = 130;
-int AQ_Scan_Steps_Z_C = 130;
-int AQ_Scan_Steps_Z_D = 100;
-
-int AA_ScanFinal_Scan_Delay_X_A = 100;
-int AA_ScanFinal_Scan_Delay_Y_A = 60;
-
-int AQ_Total_TimeSpan = 2000;
-int AQ_StopAlign_TimeSpan = 860;
-
-double FS_GradientTarget_X = 0.003;
-double FS_GradientTarget_Y = 0.002;
-double FS_GradientTarget_Z = 0.003;
-
-uint16_t FS_Count_X = 7;
-uint16_t FS_Steps_X = 25;
-uint16_t FS_Stable_X = 0;
-uint16_t FS_DelaySteps_X = 50;
-uint16_t FS_Avg_X = 600;
-uint16_t FS_Count_Y = 8;
-uint16_t FS_Steps_Y = 20;
-uint16_t FS_Stable_Y = 0;
-uint16_t FS_DelaySteps_Y = 120;
-uint16_t FS_Avg_Y = 600;
-uint16_t FS_Count_Z = 7;
-uint16_t FS_Steps_Z = 80;
-uint16_t FS_Stable_Z = 0;
-uint16_t FS_DelaySteps_Z = 80;
-uint16_t FS_Avg_Z = 800;
-uint16_t FS_Trips_X = 0;
-uint16_t FS_Trips_Y = 0;
-uint16_t FS_Trips_Z = 2;
-
-const uint16_t EP_PD_Ref = 0;
-const uint16_t EP_Board_ID = 8;
-const uint16_t EP_Station_ID = 16;
-const uint16_t EP_X_backlash = 24;
-const uint16_t EP_Y_backlash = 32;
-const uint16_t EP_Z_backlash = 40;
-const uint16_t EP_delayBetweenStep_X = 48;
-const uint16_t EP_delayBetweenStep_Y = 56;
-const uint16_t EP_delayBetweenStep_Z = 64;
-const uint16_t EP_Target_IL = 72;
-const uint16_t EP_AA_ScanFinal_Scan_Delay_X_A = 80;
-// const uint16_t EP_Server_ID = 88;        // 88~119
-// const uint16_t EP_Server_Password = 120; // 120~151
-
-// for 3D
-uint16_t EP_Motor_DIR_X = 88;
-uint16_t EP_Motor_DIR_Y = 96;
-uint16_t EP_Motor_DIR_Z = 104;
-uint16_t EP_Encoder_Motor_Step_X = 112;
-uint16_t EP_Encoder_Motor_Step_Y = 120;
-uint16_t EP_Encoder_Motor_Step_Z = 128;
-
-const uint16_t EP_Get_PD_Points = 152;
-const uint16_t EP_AQ_Scan_Compensation_Steps_Z_A = 160;
-const uint16_t EP_AQ_Total_TimeSpan = 168;
-const uint16_t EP_AQ_Scan_Steps_Z_A = 176;
-const uint16_t EP_AQ_Scan_Steps_Z_B = 184;
-const uint16_t EP_AQ_Scan_Steps_Z_C = 192;
-const uint16_t EP_AQ_Scan_Steps_Z_D = 200;
-const uint16_t EP_MotorStepRatio = 208;
-const uint16_t EP_MotorStepDelayRatio = 216;
-const uint16_t EP_FS_Count_X = 240;
-const uint16_t EP_FS_Steps_X = 248;
-const uint16_t EP_FS_Stable_X = 256;
-const uint16_t EP_FS_DelaySteps_X = 264;
-const uint16_t EP_FS_Avg_X = 272;
-const uint16_t EP_FS_Count_Y = 280;
-const uint16_t EP_FS_Steps_Y = 288;
-const uint16_t EP_FS_Stable_Y = 296;
-const uint16_t EP_FS_DelaySteps_Y = 304;
-const uint16_t EP_FS_Avg_Y = 312;
-const uint16_t EP_FS_Count_Z = 320;
-const uint16_t EP_FS_Steps_Z = 328;
-const uint16_t EP_FS_Stable_Z = 336;
-const uint16_t EP_FS_DelaySteps_Z = 344;
-const uint16_t EP_FS_Avg_Z = 352;
-const uint16_t EP_FS_Trips_X = 360;
-const uint16_t EP_FS_Trips_Y = 368;
-const uint16_t EP_FS_Trips_Z = 376;
-const uint16_t EP_FS_GradientTarget_X = 384;
-const uint16_t EP_FS_GradientTarget_Y = 392;
-const uint16_t EP_FS_GradientTarget_Z = 400;
-
-const uint16_t EP_Station_Type = 408;
-
-const uint16_t EP_AA_ScanRough_Feed_Steps_Z_A = 416;
-const uint16_t EP_AA_ScanRough_Feed_Steps_Z_B = 424;
-const uint16_t EP_AA_ScanRough_Feed_Ratio_Z_A = 432;
-const uint16_t EP_AA_ScanRough_Feed_Ratio_Z_B = 440;
-const uint16_t EP_AA_ScanRough_Feed_Ratio_Z_C = 448;
-const uint16_t EP_AA_ScanRough_Feed_Ratio_Z_D = 456;
-
-/// @brief EEPROM address of PD Ref array (700~928)
-uint16_t EP_PD_Ref_Array[15][2] =
-    {
-        {700, 708},
-        {716, 724},
-        {732, 740},
-        {748, 756}, // max -6.2 dBm
-        {764, 772},
-        {780, 788},
-        {796, 804},
-        {812, 820},
-        {828, 836},
-        {844, 852},
-        {860, 868},
-        {876, 884},
-        {892, 900},
-        {908, 916},
-        {924, 932},
-};
-
-/// @brief Default Ref array value
-double PD_Ref_Array[15][2] =
-    {
-        {24260, -3},
-        {23644, -4},
-        {23282, -6},
-        {22054, -7}, // max -6.2 dBm
-        {21385, -9},
-        {20680, -11},
-        {19956, -13},
-        {19305, -15},
-        {18655, -17},
-        {17937, -19},
-        {17285, -21},
-        {15864, -25},
-        {14177, -30},
-        {10780, -40},
-        {8240, -50},
-};
-
-double averagePDInput = 0;
-
-double ref_Dac = 0; // PD reference
-double ref_IL = 0;  // PD reference
-
-double PDValue_Best = 0;
-double AutoCuring_Best_IL = 0, PD_Now = 0, PD_Before = 0;
-
-unsigned long time_curing_0, time_curing_1, time_curing_2, time_curing_3;
-unsigned long timer_Get_IL_1 = 0, timer_Get_IL_2;
-
-bool btn_isTrigger = false;
-int Threshold;
-int stableDelay = 0;
-bool key_ctrl = false;
-
-/// @brief (1/51.2) um/pulse
-double Motor_Unit_Idx = 0.01953125; // 5 phase motor min step 4nm per step
-
-int Get_PD_Points = 1;
-double Target_IL = 0;
-double Target_IL_Rough = -3; // Stop IL value for Rought scan: default:-3 (CTF)
-double StopValue = 0;
-int cmd_No = 0;
-
-bool isStop = false, isGetPower = true, isILStable = false;
-bool isCheckStop = false;
-bool sprial_JumpToBest = true;
-int Q_State = 0;
-unsigned long Q_Time = 0;
-unsigned long LCD_Auto_Update_TimeCount = 0;
-byte GetPower_Mode = 1;
-bool is_Scan_V2_ReWork = false;
-bool is_AutoCuring = false;
-bool isTrip3Jump = true; // If station is high resolution , this value could be true;
-
-bool isWatchDog_Flag = false;
-bool isLCD_Auto_Update = false;
 
 enum SpiralType
 {
@@ -326,256 +34,6 @@ enum SpiralPlane
   YZ,
   XZ
 };
-
-void step(byte stepperPin, long steps, int delayTime)
-{
-  steps = abs(steps);
-
-  for (long i = 0; i < steps; i++)
-  {
-    digitalWrite(stepperPin, HIGH);
-    delayMicroseconds(delayTime);
-    digitalWrite(stepperPin, LOW);
-    delayMicroseconds(delayTime);
-
-    // if (isStop)
-    //   break;
-  }
-
-  // Position Record
-  if (MotorCC)
-  {
-    switch (stepperPin)
-    {
-    case X_STP_Pin:
-      Pos_Now.X += steps;
-      MotorCC_X = true;
-      X_Pos_Now = Pos_Now.X;
-      break;
-    case Y_STP_Pin:
-      Pos_Now.Y += steps;
-      MotorCC_Y = true;
-      Y_Pos_Now = Pos_Now.Y;
-      break;
-    case Z_STP_Pin:
-      Pos_Now.Z += steps;
-      MotorCC_Z = true;
-      Z_Pos_Now = Pos_Now.Z;
-      break;
-    }
-  }
-  else
-  {
-    switch (stepperPin)
-    {
-    case X_STP_Pin:
-      Pos_Now.X -= steps;
-      MotorCC_X = false;
-      X_Pos_Now = Pos_Now.X;
-      break;
-    case Y_STP_Pin:
-      Pos_Now.Y -= steps;
-      MotorCC_Y = false;
-      Y_Pos_Now = Pos_Now.Y;
-      break;
-    case Z_STP_Pin:
-      Pos_Now.Z -= steps;
-      MotorCC_Z = false;
-      Z_Pos_Now = Pos_Now.Z;
-      break;
-    }
-  }
-}
-
-void step(byte stepperPin, long steps, int delayTime, byte dirPin, bool dir)
-{
-  // steps = abs(steps);
-  digitalWrite(dirPin, dir);
-
-  for (long i = 0; i < steps; i++)
-  {
-    digitalWrite(stepperPin, HIGH);
-    delayMicroseconds(delayTime);
-    digitalWrite(stepperPin, LOW);
-    delayMicroseconds(delayTime);
-  }
-
-  // Position Record
-  if (MotorCC == true)
-  {
-    switch (stepperPin)
-    {
-    case X_STP_Pin:
-      Pos_Now.X += steps;
-      MotorCC_X = true;
-      break;
-    case Y_STP_Pin:
-      Pos_Now.Y += steps;
-      MotorCC_Y = true;
-      break;
-    case Z_STP_Pin:
-      Pos_Now.Z += steps;
-      MotorCC_Z = true;
-      break;
-    }
-  }
-  else
-  {
-    switch (stepperPin)
-    {
-    case X_STP_Pin:
-      Pos_Now.X -= steps;
-      MotorCC_X = false;
-      break;
-    case Y_STP_Pin:
-      Pos_Now.Y -= steps;
-      MotorCC_Y = false;
-      break;
-    case Z_STP_Pin:
-      Pos_Now.Z -= steps;
-      MotorCC_Z = false;
-      break;
-    }
-  }
-}
-
-double a1 = 0.0374, a2 = -65.561;
-double b1 = 0.0394, b2 = -67.778;
-
-// Dac to dBm
-double ILConverter(double pdDac)
-{
-  double IL = 0;
-
-  if (pdDac >= PD_Ref_Array[0][0])
-    return -3;
-  else if (pdDac < PD_Ref_Array[14][0])
-    return -50;
-
-  for (size_t i = 1; i < 15; i++)
-  {
-    if (pdDac >= PD_Ref_Array[i][0])
-    {
-      IL = ((pdDac - PD_Ref_Array[i][0]) / (PD_Ref_Array[i - 1][0] - PD_Ref_Array[i][0]) * (PD_Ref_Array[i - 1][1] - PD_Ref_Array[i][1])) + PD_Ref_Array[i][1];
-      break;
-    }
-  }
-
-  return IL;
-}
-
-/// @brief Calculate PD input value, Return Dac
-/// @param averageCount
-/// @return
-double Cal_PD_Input_Dac(int averageCount)
-{
-  digitalWrite(X_DIR_Pin, false);
-  digitalWrite(Y_DIR_Pin, false);
-  digitalWrite(Z_DIR_Pin, false);
-  delay(1);
-
-  double averagePDInput = 0;
-  double PDAvgInput = 0;
-  for (int i = 0; i < averageCount; i++)
-  {
-    PDAvgInput += ads.readADC_SingleEnded(0);
-  }
-
-  // Function: (PD Value) - (reference) + 300
-  averagePDInput = (PDAvgInput / averageCount);
-
-  digitalWrite(X_DIR_Pin, MotorCC_X);
-  digitalWrite(Y_DIR_Pin, MotorCC_Y);
-  digitalWrite(Z_DIR_Pin, MotorCC_Z);
-  delay(1);
-
-  return (averagePDInput - ref_Dac);
-}
-
-/// @brief Calculate PD input value, Return IL
-/// @param averageCount
-/// @return
-double Cal_PD_Input_IL(int averageCount)
-{
-  digitalWrite(X_DIR_Pin, false);
-  digitalWrite(Y_DIR_Pin, false);
-  digitalWrite(Z_DIR_Pin, false);
-  delay(1);
-
-  double averagePDInput = 0;
-  double PDAvgInput = 0;
-
-  for (int i = 0; i < averageCount; i++)
-  {
-    PDAvgInput += ads.readADC_SingleEnded(0);
-  }
-
-  averagePDInput = (PDAvgInput / averageCount);
-
-  digitalWrite(X_DIR_Pin, MotorCC_X);
-  digitalWrite(Y_DIR_Pin, MotorCC_Y);
-  digitalWrite(Z_DIR_Pin, MotorCC_Z);
-  delay(1);
-
-  double IL = ILConverter(averagePDInput) - ref_IL;
-
-  return IL;
-}
-
-/// @brief Calculate PD input value, Return Row Dac
-/// @param averageCount
-/// @return
-double Cal_PD_Input_Row_IL(int averageCount)
-{
-  digitalWrite(X_DIR_Pin, false);
-  digitalWrite(Y_DIR_Pin, false);
-  digitalWrite(Z_DIR_Pin, false);
-  delay(1);
-
-  double averagePDInput = 0;
-  double PDAvgInput = 0;
-  for (int i = 0; i < averageCount; i++)
-  {
-    PDAvgInput += ads.readADC_SingleEnded(0);
-  }
-  // Function: (PD Value)
-  averagePDInput = (PDAvgInput / averageCount);
-
-  digitalWrite(X_DIR_Pin, MotorCC_X);
-  digitalWrite(Y_DIR_Pin, MotorCC_Y);
-  digitalWrite(Z_DIR_Pin, MotorCC_Z);
-  delay(1);
-
-  double IL = ILConverter(averagePDInput);
-
-  return IL;
-}
-
-/// @brief Calculate PD input value, Return Row Dac
-/// @param averageCount
-/// @return
-double Cal_PD_Input_Row_Dac(int averageCount)
-{
-  digitalWrite(X_DIR_Pin, false);
-  digitalWrite(Y_DIR_Pin, false);
-  digitalWrite(Z_DIR_Pin, false);
-  delay(1);
-
-  double averagePDInput = 0;
-  double PDAvgInput = 0;
-  for (int i = 0; i < averageCount; i++)
-  {
-    PDAvgInput += ads.readADC_SingleEnded(0);
-  }
-  averagePDInput = (PDAvgInput / averageCount);
-
-  digitalWrite(X_DIR_Pin, MotorCC_X);
-  digitalWrite(Y_DIR_Pin, MotorCC_Y);
-  digitalWrite(Z_DIR_Pin, MotorCC_Z);
-  delay(1);
-
-  return averagePDInput;
-}
 
 void CleanEEPROM(int startPosition, int datalength)
 {
@@ -641,9 +99,6 @@ String ExtractCmd(String cmd, const char *header)
   int indexOffSet = cmd.indexOf(header);
   int strLength = strlen(header); // 使用 strlen 函式取得字串長度，並賦值給 int 變數
 
-  // Serial.println("indexOffSet:" + String(indexOffSet));
-  // Serial.println("strLength:" + String(strLength));
-
   cmd.remove(0, strLength + indexOffSet);
 
   cmd.trim();
@@ -684,45 +139,9 @@ char *UI_Menu_Items[MENU_ITEMS] =
 
 bool plus_minus = false;
 
-void EmergencyStop()
-{
-  isStop = true;
 
-  Serial.println("EmergencyStop");
-  digitalWrite(Tablet_PD_mode_Trigger_Pin, true); // false is PD mode, true is Servo mode
-}
-//------------------------------------------------------------------------------------------------------------------------------------------
-// 90:38:0C:ED:82:28 == A06 Controller
-// 0xC4, 0xDE, 0xE2, 0xC0, 0xA2, 0xD8   A05 Controller
 
-// 8C:4B:14:16:4C:F8 == A06 Core
-// 0x90, 0x38, 0x0C, 0xED, 0x82, 0x28    A06 controller
 
-// 0x8C, 0x4B, 0x14, 0x16, 0xD8, 0xD0    A07 controller
-
-// 90:38:0C:ED:6D:EC A09 controller
-
-// 0xC0, 0x49, 0xEF, 0x46, 0x2C, 0x74  A08 Controller
-
-// 0x90, 0x38, 0x0C, 0xED, 0x6D, 0xEC  A09 Controller
-
-// 0xC4, 0xDE, 0xE2, 0xC0, 0xA9, 0x60  A10 controller
-
-uint8_t ControllerAddress[] = {0x90, 0x38, 0x0C, 0xED, 0x6D, 0xEC}; // Controller addr
-// uint8_t ServerAddress[] = {0x8C, 0x4B, 0x14, 0x16, 0x35, 0x88};     // Server Mac address  #1:0x8C, 0x4B, 0x14, 0x16, 0x37, 0xF8   #2:0x8C, 0x4B, 0x14, 0x16, 0x35, 0x88
-uint8_t ServerAddress[] = {0x8C, 0x4B, 0x14, 0x16, 0x37, 0xF8}; // Server Mac address  #1:0x8C, 0x4B, 0x14, 0x16, 0x37, 0xF8   #2:0x8C, 0x4B, 0x14, 0x16, 0x35, 0x88
-uint8_t ThisAddress[6];                                         // Server Mac address  #1:0x8C, 0x4B, 0x14, 0x16, 0x37, 0xF8   #2:0x8C, 0x4B, 0x14, 0x16, 0x35, 0x88
-String ThisAddr = "";
-
-String Msg, Msg_Value;
-
-typedef struct struct_send_server_message
-{
-  String client_name = Station_ID; // ID to Station_ID
-  char msg[50];
-} struct_send_server_message;
-
-struct_send_server_message sendmsg_server;
 
 typedef struct struct_send_message
 {
@@ -755,14 +174,9 @@ typedef struct struct_sendmsg_msg_UI_Data
 // Create a struct_message to hold incoming sensor readings
 struct_send_message sendmsg;
 struct_receive_message incomingReadings;
-
 struct_sendmsg_msg_UI_Data sendmsg_UI_Data;
 
-void DataSent_Server(String MSG)
-{
-  MSG.toCharArray(sendmsg_server.msg, 30);
-  esp_err_t result = esp_now_send(ServerAddress, (uint8_t *)&sendmsg_server, sizeof(sendmsg_server));
-}
+
 
 void DataSent_Controller(String MSG)
 {
@@ -861,397 +275,6 @@ void Task_1_sendData(void *pvParameters)
   }
 }
 
-//------------------------------------------------------------------------------------------------------------------------------------------
-
-// void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep, int stableDelay)
-// {
-//   if (moveSteps > 0)
-//   {
-//     MotorCC = dirt;
-//     digitalWrite(dir_pin, dirt);
-//     delay(pinDelay);
-
-//     step(stp_pin, moveSteps, delayStep);
-//     delay(stableDelay);
-
-//     if(isDataOutput)
-//       DataOutput(false);
-//   }
-// }
-
-void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep, int stableDelay, bool isOutputPosition = false, int pinDelay = 8)
-{
-  if (moveSteps > 0)
-  {
-    MotorCC = dirt;
-    digitalWrite(dir_pin, dirt);
-    delay(pinDelay);
-
-    step(stp_pin, moveSteps, delayStep);
-    delay(stableDelay);
-
-    if (isOutputPosition)
-    {
-      delay(3); // 一定要delay，可避免記憶體存取衝突
-      DataOutput(false);
-
-      // MSGOutput("Position:" + String(X_Pos_Now) + "," + String(Y_Pos_Now) + "," + String(Z_Pos_Now));
-    }
-  }
-}
-
-void Move_Motor_abs(int xyz, long Target)
-{
-  // String axis = "";
-  long Pos_N = 0;
-  switch (xyz)
-  {
-  case 0:
-    MotorDir_Pin = X_DIR_Pin;
-    MotorSTP_Pin = X_STP_Pin;
-    Pos_N = Pos_Now.X;
-    delayBetweenStep = delayBetweenStep_X;
-    // axis = "X";
-    break;
-  case 1:
-    MotorDir_Pin = Y_DIR_Pin;
-    MotorSTP_Pin = Y_STP_Pin;
-    Pos_N = Pos_Now.Y;
-    delayBetweenStep = delayBetweenStep_Y;
-    // axis = "Y";
-    break;
-  case 2:
-    MotorDir_Pin = Z_DIR_Pin;
-    MotorSTP_Pin = Z_STP_Pin;
-    Pos_N = Pos_Now.Z;
-    delayBetweenStep = delayBetweenStep_Z;
-    // axis = "Z";
-    break;
-  }
-
-  // MSGOutput("Target: " + String(Target));
-  // MSGOutput("Pos_N: " + String(Pos_N));
-
-  MinMotroStep = Target - Pos_N;
-
-  // MSGOutput("Abs:" + axis + ":From " + String(Pos_N) + " to " + String(Target));
-
-  if (MinMotroStep < 0)
-    MotorCC = false;
-  else if (MinMotroStep > 0)
-    MotorCC = true;
-  else
-    return;
-
-  MinMotroStep = abs(MinMotroStep);
-
-  Move_Motor(MotorDir_Pin, MotorSTP_Pin, MotorCC, MinMotroStep, delayBetweenStep, 0);
-}
-
-void Move_Motor_abs_async(struct_Motor_Pos TargetPos, int DelayT = 40)
-{
-  long Delta_X = TargetPos.X - Pos_Now.X;
-  long Delta_Y = TargetPos.Y - Pos_Now.Y;
-  long Delta_Z = TargetPos.Z - Pos_Now.Z;
-
-  // 判斷方向
-  if (Delta_X > 0)
-    MotorCC_X = true;
-  else if (Delta_X < 0)
-    MotorCC_X = false;
-
-  if (Delta_Y > 0)
-    MotorCC_Y = true;
-  else if (Delta_Y < 0)
-    MotorCC_Y = false;
-
-  if (Delta_Z > 0)
-    MotorCC_Z = true;
-  else if (Delta_Z < 0)
-    MotorCC_Z = false;
-
-  // 設定軸方向
-  if (Delta_X != 0)
-    digitalWrite(X_DIR_Pin, MotorCC_X);
-
-  if (Delta_Y != 0)
-    digitalWrite(Y_DIR_Pin, MotorCC_Y);
-
-  if (Delta_Z != 0)
-    digitalWrite(Z_DIR_Pin, MotorCC_Z);
-
-  delay(3);
-
-  // 計算分時時間
-  byte MoveAxisCount = 0;
-
-  bool is_X = false;
-  bool is_Y = false;
-  bool is_Z = false;
-
-  if (Delta_X != 0)
-  {
-    MoveAxisCount++;
-    is_X = true;
-  }
-
-  if (Delta_Y != 0)
-  {
-    MoveAxisCount++;
-    is_Y = true;
-  }
-
-  if (Delta_Z != 0)
-  {
-    MoveAxisCount++;
-    is_Z = true;
-  }
-
-  if (MoveAxisCount == 0)
-    return;
-
-  delayBetweenStep = DelayT / MoveAxisCount;
-
-  // 分時多工
-
-  Delta_X = abs(Delta_X);
-  Delta_Y = abs(Delta_Y);
-  Delta_Z = abs(Delta_Z);
-
-  double max = (Delta_X > Delta_Y) ? ((Delta_X > Delta_Z) ? Delta_X : Delta_Z) : ((Delta_Y > Delta_Z) ? Delta_Y : Delta_Z);
-
-  for (size_t i = 0; i < max; i++)
-  {
-    if (is_X)
-    {
-      digitalWrite(X_STP_Pin, HIGH);
-      delayMicroseconds(delayBetweenStep);
-      digitalWrite(X_STP_Pin, LOW);
-      delayMicroseconds(delayBetweenStep);
-
-      Delta_X--;
-      if (Delta_X == 0)
-        is_X = false;
-    }
-
-    if (is_Y)
-    {
-      digitalWrite(Y_STP_Pin, HIGH);
-      delayMicroseconds(delayBetweenStep);
-      digitalWrite(Y_STP_Pin, LOW);
-      delayMicroseconds(delayBetweenStep);
-
-      Delta_Y--;
-      if (Delta_Y == 0)
-        is_Y = false;
-    }
-
-    if (is_Z)
-    {
-      digitalWrite(Z_STP_Pin, HIGH);
-      delayMicroseconds(delayBetweenStep);
-      digitalWrite(Z_STP_Pin, LOW);
-      delayMicroseconds(delayBetweenStep);
-
-      Delta_Z--;
-      if (Delta_Z == 0)
-        is_Z = false;
-    }
-  }
-
-  // // Position Record
-  Pos_Now.X = TargetPos.X;
-  Pos_Now.Y = TargetPos.Y;
-  Pos_Now.Z = TargetPos.Z;
-}
-
-/// @brief 多軸馬達同動
-/// @param TargetPos 目標絕對位置
-/// @param DelayT 步進時間間隔
-void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT = 10)
-{
-  long Delta_X = TargetPos.X - Pos_Now.X;
-  long Delta_Y = TargetPos.Y - Pos_Now.Y;
-  long Delta_Z = TargetPos.Z - Pos_Now.Z;
-
-  // 判斷方向
-  if (Delta_X > 0)
-    MotorCC_X = true;
-  else if (Delta_X < 0)
-    MotorCC_X = false;
-
-  if (Delta_Y > 0)
-    MotorCC_Y = true;
-  else if (Delta_Y < 0)
-    MotorCC_Y = false;
-
-  if (Delta_Z > 0)
-    MotorCC_Z = true;
-  else if (Delta_Z < 0)
-    MotorCC_Z = false;
-
-  // 設定軸方向
-  if (Delta_X != 0)
-    digitalWrite(X_DIR_Pin, MotorCC_X);
-
-  if (Delta_Y != 0)
-    digitalWrite(Y_DIR_Pin, MotorCC_Y);
-
-  if (Delta_Z != 0)
-    digitalWrite(Z_DIR_Pin, MotorCC_Z);
-
-  // delayMicroseconds(300);
-  // delay(3);
-
-  // 計算分時時間
-  byte MoveAxisCount = 0;
-
-  bool is_X = false;
-  bool is_Y = false;
-  bool is_Z = false;
-
-  if (Delta_X != 0)
-  {
-    MoveAxisCount++;
-    is_X = true;
-  }
-
-  if (Delta_Y != 0)
-  {
-    MoveAxisCount++;
-    is_Y = true;
-  }
-
-  if (Delta_Z != 0)
-  {
-    MoveAxisCount++;
-    is_Z = true;
-  }
-
-  if (MoveAxisCount == 0)
-  {
-    MSGOutput("Delta Distance All 0");
-    return;
-  }
-
-  // 分時多工
-  Delta_X = abs(Delta_X);
-  Delta_Y = abs(Delta_Y);
-  Delta_Z = abs(Delta_Z);
-
-  // 計算最大的Delta 值
-  long max = (Delta_X > Delta_Y) ? ((Delta_X > Delta_Z) ? Delta_X : Delta_Z) : ((Delta_Y > Delta_Z) ? Delta_Y : Delta_Z);
-
-  int ratio_X = Delta_X == 0 ? 1 : (max / Delta_X);
-  int ratio_Y = Delta_Y == 0 ? 1 : (max / Delta_Y);
-  int ratio_Z = Delta_Z == 0 ? 1 : (max / Delta_Z);
-
-  int ratio_max = (ratio_X > ratio_Y) ? ((ratio_X > ratio_Z) ? ratio_X : ratio_Z) : ((ratio_Y > ratio_Z) ? ratio_Y : ratio_Z);
-
-  int Count_Step = 1;
-
-  bool is_X_Temp = false;
-  bool is_Y_Temp = false;
-  bool is_Z_Temp = false;
-
-  // int MinDelay = DelayT;
-
-  for (size_t i = 0; i < max; i++)
-  {
-    is_X_Temp = Count_Step % ratio_X == 0 ? true : false;
-    is_Y_Temp = Count_Step % ratio_Y == 0 ? true : false;
-    is_Z_Temp = Count_Step % ratio_Z == 0 ? true : false;
-
-    if (is_X && is_X_Temp)
-      digitalWrite(X_STP_Pin, HIGH);
-    if (is_Y && is_Y_Temp)
-      digitalWrite(Y_STP_Pin, HIGH);
-    if (is_Z && is_Z_Temp)
-      digitalWrite(Z_STP_Pin, HIGH);
-
-    delayMicroseconds(DelayT);
-
-    if (is_X && is_X_Temp)
-    {
-      digitalWrite(X_STP_Pin, LOW);
-
-      Delta_X--;
-      if (Delta_X == 0)
-        is_X = false;
-    }
-
-    if (is_Y && is_Y_Temp)
-    {
-      digitalWrite(Y_STP_Pin, LOW);
-
-      Delta_Y--;
-      if (Delta_Y == 0)
-        is_Y = false;
-    }
-
-    if (is_Z && is_Z_Temp)
-    {
-      digitalWrite(Z_STP_Pin, LOW);
-
-      Delta_Z--;
-      if (Delta_Z == 0)
-        is_Z = false;
-    }
-
-    delayMicroseconds(DelayT);
-
-    Count_Step++;
-    if (Count_Step > ratio_max)
-      Count_Step = Count_Step % ratio_max;
-  }
-
-  // // Position Record
-  Pos_Now.X = TargetPos.X;
-  Pos_Now.Y = TargetPos.Y;
-  Pos_Now.Z = TargetPos.Z;
-}
-
-void Move_Motor_abs_all(long x, long y, long z, int DelayT = 6)
-{
-  struct_Motor_Pos TargetPos;
-  TargetPos.X = x;
-  TargetPos.Y = y;
-  TargetPos.Z = z;
-  Move_Motor_abs_sync(TargetPos, DelayT);
-
-  // MSGOutput("Move All Abs End");
-}
-
-void Move_Motor_abs_all(int x, int y, int z, bool IsMsg, int DelayT = 10)
-{
-  MSGOutput("Move All Abs Sync Start");
-
-  struct_Motor_Pos TargetPos;
-  TargetPos.X = x;
-  TargetPos.Y = y;
-  TargetPos.Z = z;
-  Move_Motor_abs_sync(TargetPos, DelayT);
-
-  if (IsMsg)
-    MSGOutput("Move All Abs End");
-}
-
-void Move_Motor_Cont(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep)
-{
-  MotorSTP_Pin = dir_pin;
-
-  if (MotorDir_Pin != dir_pin || MotorCC != dirt)
-  {
-    MotorCC = dirt;
-    MotorDir_Pin = dir_pin;
-    digitalWrite(MotorDir_Pin, MotorCC); // 步進馬達方向控制, false為負方向
-    delay(3);
-  }
-
-  step(stp_pin, moveSteps, delayStep);
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------
 
 #define Enc_X_outputA 12 // 定義 X axis encoder A pin
 #define Enc_X_outputB 14 // 定義 X axis encoder B pin
@@ -2469,7 +1492,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
               double y[3];
               for (int k = -1; k < 2; k++)
               {
-                x[k + 1] = Get_1_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
+                x[k + 1] = Get_1D_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
                 y[k + 1] = PD_Value[indexofBestIL + k];                    // fill this with your sensor data
               }
 
@@ -2549,7 +1572,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
               double y[3];
               for (int k = -1; k < 2; k++)
               {
-                x[k + 1] = Get_1_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
+                x[k + 1] = Get_1D_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
                 y[k + 1] = PD_Value[indexofBestIL + k];                    // fill this with your sensor data
               }
 
@@ -2650,7 +1673,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
             double y[5];
             for (int k = i - 4; k <= i; k++)
             {
-              x[k - (i - 4)] = Get_1_Position(Pos_Virtual[k], h); // idex * step = real steps
+              x[k - (i - 4)] = Get_1D_Position(Pos_Virtual[k], h); // idex * step = real steps
               y[k - (i - 4)] = PD_Value[k];                       // fill this with your sensor data
             }
 
@@ -2739,7 +1762,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
           double y[3];
           for (int k = -1; k < 2; k++)
           {
-            x[k + 1] = Get_1_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
+            x[k + 1] = Get_1D_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
             y[k + 1] = PD_Value[indexofBestIL + k];                    // fill this with your sensor data
           }
 
@@ -2856,7 +1879,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
         double y[3];
         for (int k = -1; k < 2; k++)
         {
-          x[k + 1] = Get_1_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
+          x[k + 1] = Get_1D_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
           y[k + 1] = PD_Value[indexofBestIL + k];                    // fill this with your sensor data
         }
 
@@ -2924,8 +1947,6 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
   trip++;
 
   double IL_Best_Trip2 = 0;
-  // long Pos_Best_Trip2 = 0;
-  // long Pos_Ini_Trip2 = 0;
   struct_Motor_Pos Pos_Best_Trip2, Pos_Ini_Trip2;
 
   //------------------------------------------------------Trip_2 ------------------------------------------------------------
@@ -2943,9 +1964,6 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
     Pos_Best_Trip2 = Get_Position();
     Pos_Ini_Trip2 = Get_Position();
 
-    // Pos_Best_Trip2 = Get_Position(XYZ);
-    // Pos_Ini_Trip2 = Get_Position(XYZ);
-
     // 建立虛擬點陣列
     for (int i = 0; i < dataCount; i++)
     {
@@ -2953,7 +1971,6 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
 
       if (i == 0)
       {
-        // Pos_Virtual[i] = Pos_Ini_Trip1;
         Pos_Virtual[i].X = 0;
         Pos_Virtual[i].Y = 0;
         Pos_Virtual[i].Z = 0;
@@ -3007,8 +2024,6 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
       // 馬達移動(加上初始位移量)
       Move_Motor_abs_all(M(0) + OriginalPos.X, M(1) + OriginalPos.Y, M(2) + OriginalPos.Z, delayBetweenStep); // 初始位移
 
-      // 馬達移動
-      // Move_Motor_abs_all(M(0), M(1), M(2), delayBetweenStep);
       delay(stableDelay);
 
       if (i > 1 && PD_Value[i - 1] > -2)
@@ -3078,9 +2093,8 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
         for (int k = -1; k < 2; k++)
         {
           // x[k + 1] = Step_Value[indexofBestIL + k]; // idex * step = real steps
-          x[k + 1] = Get_1_Position(Pos_Virtual[indexofBestIL + k], XYZ); // idex * step = real steps
+          x[k + 1] = Get_1D_Position(Pos_Virtual[indexofBestIL + k], XYZ); // idex * step = real steps
           y[k + 1] = PD_Value[indexofBestIL + k];                         // fill this with your sensor data
-          // MSGOutput("Point : " + String(x[k + 1]) + " , " + String(y[k + 1]));
         }
 
         long result = Curfit(x, y, 3);
@@ -3134,11 +2148,6 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
 
       MSGOutput("Best pos in Trip_2 : " + Show_Position(Pos_Best_Trip2)); //------------Best in Trip_2----------------
 
-      // if (XYZ == 2)
-      //   Pos_Best_Trip2 = Pos_Best_Trip2 - (AQ_Scan_Compensation_Steps_Z_A * MotorStepRatio);
-
-      // MSGOutput("Best pos in Trip_2 (Compensation) : " + Show_Position(Pos_Best_Trip2));
-
       PD_Best = IL_Best_Trip2;
 
       BestPosXYZ = Pos_Best_Trip2;
@@ -3166,38 +2175,15 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
       // Best IL in Trip 1 and Trip setting is 1
       if (Trips == 1)
       {
-        // MotorCC = !MotorCC; // Reverse direction
-        // digitalWrite(DIR_Pin, MotorCC);
-        // delay(15);
-
         MSGOutput("Jump to Trip Initial Pos : " + Show_Position(Pos_Ini_Trip1));
         Move_Motor_abs_all(Pos_Ini_Trip1.X, Pos_Ini_Trip1.Y, Pos_Ini_Trip1.Z, delayBetweenStep); // Jump to Trip_1 start position
-
-        // MSGOutput("Jump Backlash : " + String(backlash));
-        // step(STP_Pin, backlash, delayBetweenStep);
 
         delay(300); // 100
 
         PD_Now = Cal_PD_Input_IL(Get_PD_Points);
         DataOutput(PD_Now);
         DataOutput(XYZ, PD_Now); // int xyz, double pdValue
-
-        // MotorCC = !MotorCC; // Reverse direction
-        // digitalWrite(DIR_Pin, MotorCC);
-        // delay(5);
-
-        // deltaPos = abs(Pos_Best_Trip1 - Get_Position(XYZ));
-        // MSGOutput("deltaPos : " + String(deltaPos));
-
-        // MSGOutput("Best in Trip_1 : " + String(Pos_Best_Trip1));
-
-        // BestPos = Pos_Best_Trip1;
       }
-
-      // if (XYZ == 2)
-      //   Pos_Best_Trip1 = Pos_Best_Trip1 - (AQ_Scan_Compensation_Steps_Z_A * MotorStepRatio);
-
-      // MSGOutput("Best in Trip_1 (Compensation) : " + Show_Position(Pos_Best_Trip1));
 
       BestPosXYZ = Pos_Best_Trip1;
     }
@@ -3264,20 +2250,16 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
     }
     else
     {
-      // Move_Motor(DIR_Pin, STP_Pin, MotorCC, deltaPos, delayBetweenStep, 100); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
-      // Move_Motor_abs(XYZ, BestPos); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
       Move_Motor_abs_all(BestPosXYZ.X, BestPosXYZ.Y, BestPosXYZ.Z, delayBetweenStep); // Jump to Trip_1 start position
 
       delay(300);
       PD_Now = Cal_PD_Input_IL(Get_PD_Points);
       DataOutput(PD_Now);
       DataOutput(XYZ, PD_Now); // int xyz, double pdValue
-      // MSGOutput("Trip 3 Jump : " + String(BestPos));
       MSGOutput("Trip 3 Jump : " + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + "=" + String(PD_initial));
     }
   }
 
-  // PD_Now = Cal_PD_Input_IL(2*Get_PD_Points);
   MSGOutput("Best IL: " + String(PD_Best));
   MSGOutput("Final IL: " + String(PD_Now));
 
@@ -3696,8 +2678,6 @@ void setup()
   Serial.println("isServerConnected:" + String(isWiFiConnected));
   isCheckingServer = false;
 
-  // tarPZ = Encoder_Motor_Step_X * tan(11.5 * (PI / 180));
-
   nowMillis_DataRec = millis();
 
   disableCore0WDT(); // Disable watch dog
@@ -3754,12 +2734,8 @@ void setup()
   DataOutput(false);
 }
 
-// bool isMsgShow = false;
 unsigned long previousMillis = 0;
 const long interval = 100; // default:100
-// String Data;
-// String ServerIP = "http://192.168.4.1/";
-// const char *serverTestData = "http://192.168.4.1/?param1=10&param2=hi";
 
 String Txt_SpiralSetting = "";
 String Txt_LineScanSetting = "";
@@ -3862,8 +2838,6 @@ void loop()
     cmd_from_contr = "";
     cmd_value_from_contr = "";
   }
-
-  // delay(interval);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -5057,20 +4031,15 @@ long Curfit(double x1[], double y1[], int dataCount)
   char buf[4];
   int xpower = 0;
   int order = 2;
-  // snprintf(buf, 4, "Fitting curve of order %i to data of power %i...\n", order, xpower);
-  // Serial.println(buf);
 
   double x[dataCount]; // idex * step = real steps
   double y[dataCount]; // fill this with your sensor data
 
   double center_x = x1[0];
-  // Serial.println("Center x:" + String(center_x));
   for (int i = 0; i < dataCount; i++)
   {
     x[i] = x1[i] - center_x;
     y[i] = y1[i];
-
-    // Serial.println("array xy:" + String(x[i]) + ", " + String(y[i]));
   }
 
   int step_distance = abs(x[1] - x[0]);
@@ -5082,31 +4051,10 @@ long Curfit(double x1[], double y1[], int dataCount)
   if (ret == 0)
   { // Returned value is 0 if no error
     uint8_t c = 'a';
-    // Serial.println("Coefficients are");
-
-    // for (int i = 0; i < sizeof(coeffs) / sizeof(double); i++)
-    // {
-    //   snprintf(buf, 100, "%c=", c++);
-    //   Serial.print(buf);
-    //   Serial.print(coeffs[i]);
-    //   Serial.print('\t');
-    // }
-    // Serial.println("");
 
     long result_x = (-1 * coeffs[1]) / (2 * coeffs[0]);
-    // Serial.println("Curfit X is : " + String(result_x));
-    // Serial.println("Final X is : " + String(result_x + center_x));
 
     return result_x + center_x;
-
-    // if (step_distance > abs(x[1] - result_x))
-    //   return result_x + center_x;
-    // else
-    // {
-    //   result_x = x1[1];
-    //   Serial.println("Final X is : " + String(result_x));
-    //   return result_x;
-    // }
   }
   else
   {
@@ -5126,15 +4074,11 @@ long Curfit_2(double x1[], double y1[], int dataCount)
   double x[dataCount]; // idex * step = real steps
   double y[dataCount]; // fill this with your sensor data
 
-  // double center_x = x1[0];
-  // Serial.println("Center x:" + String(center_x));
   for (int i = 0; i < dataCount; i++)
   {
     x[i] = x1[i];
     y[i] = y1[i];
   }
-
-  // int step_distance = abs(x[1] - x[0]);
 
   double coeffs[order + 1];
 
@@ -5479,8 +4423,6 @@ struct_AlignResult AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int 
   }
 
   return AlignResult_V2;
-
-  // return PD_Best;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -5876,17 +4818,13 @@ int Function_Classification(String cmd, int ButtonSelected)
       cmd.remove(0, 1);
 
       if (Contains(cmd, "m"))
-      {
         dirt = false;
-      }
       else if (Contains(cmd, "p"))
-      {
         dirt = true;
-      }
 
       cmd.remove(0, 2);
 
-      Move_Motor(dirPin, stpPin, dirt, cmd.toDouble(), delayNow, 0); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
+      Move_Motor(dirPin, stpPin, dirt, cmd.toDouble(), delayNow, 0, true, 1); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
     }
 
     // Abs
@@ -8563,78 +7501,6 @@ void CheckStop()
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-// bool isWiFiConnected = false;
-void CMDOutput(String cmd)
-{
-  String msg = "CMD::" + cmd;
-  Serial.println(msg);
-
-  if (isWiFiConnected)
-    DataSent_Server(msg);
-}
-
-void CMDOutput(String cmd, bool isSentServer)
-{
-  String msg = "CMD::" + cmd;
-  Serial.println(msg);
-
-  if (isSentServer)
-    DataSent_Server(msg);
-}
-
-// Output now XYZ position and IL
-void DataOutput()
-{
-  if (isGetPower)
-  {
-    double IL = Cal_PD_Input_IL(Get_PD_Points);
-    Serial.println("Position:" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + "," + String(IL));
-  }
-  else
-  {
-    Serial.println("Position:" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + ",0");
-  }
-}
-
-// Output now XYZ position and IL
-void DataOutput(double IL)
-{
-  Serial.println("Position:" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + "," + String(IL));
-}
-
-// Output now XYZ position (IL))
-void DataOutput(bool isIL)
-{
-  if (isIL && isGetPower)
-  {
-    double IL = Cal_PD_Input_IL(Get_PD_Points);
-    MSGOutput("Position:" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + "," + String(IL));
-  }
-  else
-  {
-    MSGOutput("Position :" + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z));
-  }
-}
-
-// Output now one axis position and IL
-void DataOutput(int xyz, double pdValue)
-{
-  switch (xyz)
-  {
-  case 0:
-    CMDOutput(">:" + String(Pos_Now.X) + "," + String(pdValue));
-    break;
-
-  case 1:
-    CMDOutput(">:" + String(Pos_Now.Y) + "," + String(pdValue));
-    break;
-
-  case 2:
-    CMDOutput(">:" + String(Pos_Now.Z) + "," + String(pdValue));
-    break;
-  }
-}
-
 long Get_Position(int xyz)
 {
   switch (xyz)
@@ -8653,13 +7519,6 @@ long Get_Position(int xyz)
   }
 }
 
-// void Get_Position(struct_Motor_Pos Pos)
-// {
-//   Pos.X = Pos_Now.X;
-//   Pos.Y = Pos_Now.Y;
-//   Pos.Z = Pos_Now.Z;
-// }
-
 struct_Motor_Pos Get_Position()
 {
   struct_Motor_Pos smp;
@@ -8670,7 +7529,7 @@ struct_Motor_Pos Get_Position()
   return smp;
 }
 
-long Get_1_Position(struct_Motor_Pos Pos, int xyz)
+long Get_1D_Position(struct_Motor_Pos Pos, int xyz)
 {
   if (xyz == 0)
     return Pos.X;
@@ -8693,15 +7552,7 @@ String Show_Position(struct_Motor_Pos Pos)
   return String(Pos.X) + "," + String(Pos.Y) + "," + String(Pos.Z);
 }
 
-void MSGOutput(String msg)
-{
-  Serial.println(msg);
 
-  if (isWiFiConnected)
-  {
-    DataSent_Server(msg);
-  }
-}
 
 bool isNumberic(String str)
 {
