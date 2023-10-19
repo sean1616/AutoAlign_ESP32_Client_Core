@@ -4824,7 +4824,7 @@ int Function_Classification(String cmd, int ButtonSelected)
 
       cmd.remove(0, 2);
 
-      Move_Motor(dirPin, stpPin, dirt, cmd.toDouble(), delayNow, 0, true, 1); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
+      Move_Motor(dirPin, stpPin, dirt, cmd.toDouble(), delayNow, 0, true, 8); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
     }
 
     // Abs
@@ -4858,8 +4858,6 @@ int Function_Classification(String cmd, int ButtonSelected)
 
       Move_Motor_abs(xyz, cmd.toDouble());
 
-      // MSGOutput("Move End");
-
       return 0;
     }
 
@@ -4871,7 +4869,6 @@ int Function_Classification(String cmd, int ButtonSelected)
       int travel_x = 0, travel_y = 0, travel_z = 0;
 
       travel_x = cmd.substring(0, cmd.indexOf('_')).toInt();
-      // Serial.println(cmd.substring(0, cmd.indexOf('_'))); // x
 
       cmd.remove(0, cmd.indexOf('_') + 1);
 
@@ -5340,6 +5337,20 @@ int Function_Classification(String cmd, int ButtonSelected)
       // cmd.trim();
       MotorStepDelayRatio = WR_EEPROM(216, cmd).toDouble();
       MSGOutput("Set_MotorStepDelayRatio:" + String(MotorStepDelayRatio));
+    }
+
+
+    // Get IsStop Command
+    else if (Contains(cmd, "CLR_"))
+    {
+      cmd = ExtractCmd(cmd, "CLR_");
+
+      if(isNumberic(cmd)){
+        int epmP = cmd.toInt();
+        CleanEEPROM(epmP, 8); // Clean EEPROM(int startPosition, int datalength)
+        MSGOutput("CleanEEPROM:" + String(epmP));
+        cmd = "";
+      }
     }
 
     // Get IsStop Command
@@ -6680,6 +6691,12 @@ int Function_Excecutation(String cmd, int cmd_No)
         DataOutput(false);
         cmd_No = 0;
         break;
+
+        // case 30: /* Get XYZ Position */
+        //   EmergencyStop();
+        //   MSGOutput("Stop");
+        //   cmd_No = 0;
+        // break;
       }
     }
 
@@ -6932,6 +6949,7 @@ int Function_Excecutation(String cmd, int cmd_No)
         Move_Motor_Cont(X_DIR_Pin, X_STP_Pin, false, 400, delayBetweenStep_X);
         MotorCC_X = true;
 
+        cmd_No = 0;
         break;
 
         // X- feed - jog
@@ -6940,6 +6958,7 @@ int Function_Excecutation(String cmd, int cmd_No)
         Move_Motor_Cont(X_DIR_Pin, X_STP_Pin, true, 400, delayBetweenStep_X);
         MotorCC_X = false;
 
+        cmd_No = 0;
         break;
 
       // Y+ feed - jog
@@ -6947,6 +6966,7 @@ int Function_Excecutation(String cmd, int cmd_No)
         MotorCC = MotorCC_Y;
         Move_Motor_Cont(Y_DIR_Pin, Y_STP_Pin, false, 400, delayBetweenStep_Y);
         MotorCC_Y = true;
+        cmd_No = 0;
         break;
 
       // Y- feed - jog
@@ -6954,6 +6974,7 @@ int Function_Excecutation(String cmd, int cmd_No)
         MotorCC = MotorCC_Y;
         Move_Motor_Cont(Y_DIR_Pin, Y_STP_Pin, true, 400, delayBetweenStep_Y);
         MotorCC_Y = false;
+        cmd_No = 0;
         break;
 
         // Z+ feed - jog
@@ -6961,6 +6982,7 @@ int Function_Excecutation(String cmd, int cmd_No)
         MotorCC = MotorCC_Z;
         Move_Motor_Cont(Z_DIR_Pin, Z_STP_Pin, true, 400, delayBetweenStep_Z);
         MotorCC_Z = true;
+        cmd_No = 0;
         break;
 
         // Z- feed - jog
@@ -6968,6 +6990,7 @@ int Function_Excecutation(String cmd, int cmd_No)
         MotorCC = MotorCC_Z;
         Move_Motor_Cont(Z_DIR_Pin, Z_STP_Pin, false, 400, delayBetweenStep_Z);
         MotorCC_Z = false;
+        cmd_No = 0;
         break;
 
       // EmergencyStop
@@ -6975,11 +6998,13 @@ int Function_Excecutation(String cmd, int cmd_No)
         isStop = true;
         Serial.println("EmergencyStop");
         digitalWrite(Tablet_PD_mode_Trigger_Pin, true); // false is PD mode, true is Servo mode
+        cmd_No = 0;
         break;
 
       // Go Home
       case 130:
         Move_Motor_abs_all(0, 0, 0);
+        cmd_No = 0;
         break;
 
       // Line Scan
@@ -7088,6 +7113,7 @@ int Function_Excecutation(String cmd, int cmd_No)
         // }
 
         MSGOutput("Auto_Align_End");
+        cmd_No = 0;
 
         return 0;
 
@@ -7431,6 +7457,7 @@ int Function_Excecutation(String cmd, int cmd_No)
         }
 
 #pragma endregion
+        cmd_No = 0;
 
         break;
       }
@@ -7480,8 +7507,12 @@ void CheckStop()
     String cmd = Serial.readString();
 
     cmd_No = Function_Classification(cmd, ButtonSelected);
-    if (cmd_No == 30)
-      EmergencyStop();
+    if (cmd_No == 30){
+      isStop = true;
+
+      Serial.println("EmergencyStop");
+      // EmergencyStop();
+    }
     else
     {
       cmd.replace("\r", "");

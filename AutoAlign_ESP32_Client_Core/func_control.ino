@@ -198,6 +198,9 @@ void step(byte stepperPin, long steps, int delayTime)
       break;
     }
   }
+
+  if(isStop)
+    return;
 }
 
 void step(byte stepperPin, long steps, int delayTime, byte dirPin, bool dir)
@@ -262,6 +265,9 @@ void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delay
 
     step(stp_pin, moveSteps, delayStep);
     delay(stableDelay);
+
+    if(isStop)
+      return ;
 
     if (isOutputPosition)
     {
@@ -567,6 +573,9 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT)
     Count_Step++;
     if (Count_Step > ratio_max)
       Count_Step = Count_Step % ratio_max;
+
+    if(isStop)
+      return;
   }
 
   // // Position Record
