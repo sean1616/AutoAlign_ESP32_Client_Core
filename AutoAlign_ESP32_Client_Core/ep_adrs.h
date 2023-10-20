@@ -1,6 +1,8 @@
 #if !defined(EP_ADRS_H)
 #define EP_ADRS_H
 
+#include "Arduino.h"
+
 const uint16_t EP_PD_Ref = 0;
 const uint16_t EP_Board_ID = 8;
 const uint16_t EP_Station_ID = 16;
@@ -11,17 +13,18 @@ const uint16_t EP_delayBetweenStep_X = 48;
 const uint16_t EP_delayBetweenStep_Y = 56;
 const uint16_t EP_delayBetweenStep_Z = 64;
 const uint16_t EP_Target_IL = 72;
-const uint16_t EP_AA_ScanFinal_Scan_Delay_X_A = 80;
+const uint16_t EP_FW_Version = 80;
+// const uint16_t EP_AA_ScanFinal_Scan_Delay_X_A = 80;
 // const uint16_t EP_Server_ID = 88;        // 88~119
 // const uint16_t EP_Server_Password = 120; // 120~151
 
 // for 3D
-uint16_t EP_Motor_DIR_X = 88;
-uint16_t EP_Motor_DIR_Y = 96;
-uint16_t EP_Motor_DIR_Z = 104;
-uint16_t EP_Encoder_Motor_Step_X = 112;
-uint16_t EP_Encoder_Motor_Step_Y = 120;
-uint16_t EP_Encoder_Motor_Step_Z = 128;
+const uint16_t EP_Motor_DIR_X = 88;
+const uint16_t EP_Motor_DIR_Y = 96;
+const uint16_t EP_Motor_DIR_Z = 104;
+const uint16_t EP_Encoder_Motor_Step_X = 112;
+const uint16_t EP_Encoder_Motor_Step_Y = 120;
+const uint16_t EP_Encoder_Motor_Step_Z = 128;
 
 const uint16_t EP_Get_PD_Points = 152;
 const uint16_t EP_AQ_Scan_Compensation_Steps_Z_A = 160;

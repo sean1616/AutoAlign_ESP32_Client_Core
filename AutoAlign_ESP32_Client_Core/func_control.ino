@@ -1,4 +1,10 @@
 #include "config.h"
+#include "Arduino.h"
+
+bool MotorCC_A = false;
+bool MotorCC_X = false;
+bool MotorCC_Y = false;
+bool MotorCC_Z = false;
 
 // Dac to dBm
 double ILConverter(double pdDac)
@@ -152,11 +158,32 @@ void step(byte stepperPin, long steps, int delayTime)
     digitalWrite(stepperPin, HIGH);
     delayMicroseconds(delayTime);
     digitalWrite(stepperPin, LOW);
-    delayMicroseconds(delayTime);
+    delayMicroseconds(delayTime);    
+
+    if(isStop) 
+    {
+      steps -= (i+1);
+      break;
+    }
+  }
+
+  bool dirc = false;
+
+  if (stepperPin == X_STP_Pin)
+  {
+    dirc = digitalRead(X_DIR_Pin);
+  }
+  else if (stepperPin == Y_STP_Pin)
+  {
+    dirc = digitalRead(Y_DIR_Pin);
+  }
+  else if (stepperPin == Z_STP_Pin)
+  {
+    dirc = digitalRead(Z_DIR_Pin);
   }
 
   // Position Record
-  if (MotorCC)
+  if (dirc)
   {
     switch (stepperPin)
     {
@@ -198,9 +225,6 @@ void step(byte stepperPin, long steps, int delayTime)
       break;
     }
   }
-
-  if(isStop)
-    return;
 }
 
 void step(byte stepperPin, long steps, int delayTime, byte dirPin, bool dir)
@@ -214,10 +238,31 @@ void step(byte stepperPin, long steps, int delayTime, byte dirPin, bool dir)
     delayMicroseconds(delayTime);
     digitalWrite(stepperPin, LOW);
     delayMicroseconds(delayTime);
+
+    if(isStop) 
+    {
+      steps -= (i+1);
+      break;
+    }
+  }
+
+  bool dirc = false;
+
+  if (stepperPin == X_STP_Pin)
+  {
+    dirc = digitalRead(X_DIR_Pin);
+  }
+  else if (stepperPin == Y_STP_Pin)
+  {
+    dirc = digitalRead(Y_DIR_Pin);
+  }
+  else if (stepperPin == Z_STP_Pin)
+  {
+    dirc = digitalRead(Z_DIR_Pin);
   }
 
   // Position Record
-  if (MotorCC == true)
+  if (dirc)
   {
     switch (stepperPin)
     {
@@ -259,15 +304,12 @@ void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delay
 {
   if (moveSteps > 0)
   {
-    MotorCC = dirt;
+    // MotorCC_A = dirt;
     digitalWrite(dir_pin, dirt);
     delay(pinDelay);
 
     step(stp_pin, moveSteps, delayStep);
     delay(stableDelay);
-
-    if(isStop)
-      return ;
 
     if (isOutputPosition)
     {
@@ -306,16 +348,18 @@ void Move_Motor_abs(int xyz, long Target)
 
   MinMotroStep = Target - Pos_N;
 
+  bool dir = false;
+
   if (MinMotroStep < 0)
-    MotorCC = false;
+    dir = false;
   else if (MinMotroStep > 0)
-    MotorCC = true;
+    dir = true;
   else
     return;
 
   MinMotroStep = abs(MinMotroStep);
 
-  Move_Motor(MotorDir_Pin, MotorSTP_Pin, MotorCC, MinMotroStep, delayBetweenStep, 0, false, 8);
+  Move_Motor(MotorDir_Pin, MotorSTP_Pin, dir, MinMotroStep, delayBetweenStep, 0, false, 8);
 }
 
 void Move_Motor_abs_async(struct_Motor_Pos TargetPos, int DelayT)
@@ -613,11 +657,11 @@ void Move_Motor_Cont(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int 
 {
   MotorSTP_Pin = dir_pin;
 
-  if (MotorDir_Pin != dir_pin || MotorCC != dirt)
+  if (MotorDir_Pin != dir_pin || MotorCC_A != dirt)
   {
-    MotorCC = dirt;
+    MotorCC_A = dirt;
     MotorDir_Pin = dir_pin;
-    digitalWrite(MotorDir_Pin, MotorCC); // 步進馬達方向控制, false為負方向
+    digitalWrite(MotorDir_Pin, MotorCC_A); // 步進馬達方向控制, false為負方向
     delay(3);
   }
 

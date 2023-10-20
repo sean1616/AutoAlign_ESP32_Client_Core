@@ -15,9 +15,10 @@ const byte Y_DIR_Pin = 18; // y軸 步進馬達方向控制 4 => 18
 const byte Z_STP_Pin = 16; // z軸 步進控制Pulse
 const byte Z_DIR_Pin = 17; // z軸 步進馬達方向控制
 
+const byte AWO_Pin = 4; // 步進馬達電流開關控制 On為中斷，Off開啟
+
 String ID = "003";
 String Station_ID = "A00";
-
 
 int ButtonSelected = 0;
 
@@ -83,10 +84,13 @@ bool isCheckingServer = false;
 
 int MotorDir_Pin = 0;
 int MotorSTP_Pin = 0;
-bool MotorCC = false;
-bool MotorCC_X = false;
-bool MotorCC_Y = false;
-bool MotorCC_Z = false;
+
+
+
+extern bool MotorCC_A;
+extern bool MotorCC_X;
+extern bool MotorCC_Y;
+extern bool MotorCC_Z;
 
 double MotorStepRatio = 1;
 double MotorStepDelayRatio = 1;
