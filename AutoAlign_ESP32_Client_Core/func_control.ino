@@ -141,6 +141,32 @@ double Cal_PD_Input_Row_Dac(int averageCount)
   return averagePDInput;
 }
 
+double Get_IL_DAC(int averageCount)
+{
+  switch (GetPower_Mode)
+  {
+  case 1:
+    return Cal_PD_Input_IL(averageCount);
+    break;
+
+  case 2:
+    return Cal_PD_Input_Dac(averageCount);
+    break;
+
+  case 3:
+    return Cal_PD_Input_Row_IL(averageCount);
+    break;
+
+  case 4:
+    return Cal_PD_Input_Row_Dac(averageCount);
+    break;
+
+  default:
+    return Cal_PD_Input_IL(averageCount);
+    break;
+  }
+}
+
 void EmergencyStop()
 {
   isStop = true;

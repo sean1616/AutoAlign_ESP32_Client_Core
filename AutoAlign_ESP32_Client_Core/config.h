@@ -1,7 +1,6 @@
 #if !defined(CONFIG_H)
 #define CONFIG_H
 
-
 #include "Arduino.h"
 #include "ep_adrs.h"
 
@@ -84,8 +83,6 @@ bool isCheckingServer = false;
 
 int MotorDir_Pin = 0;
 int MotorSTP_Pin = 0;
-
-
 
 extern bool MotorCC_A;
 extern bool MotorCC_X;
@@ -243,6 +240,7 @@ double Cal_PD_Input_IL(int averageCount);
 double Cal_PD_Input_Dac(int averageCount);
 double Cal_PD_Input_Row_IL(int averageCount);
 double Cal_PD_Input_Row_Dac(int averageCount);
+double Get_IL_DAC(int averageCount);
 void EmergencyStop();
 
 void step(byte stepperPin, long steps, int delayTime);
@@ -255,4 +253,4 @@ void Move_Motor_abs_all(long x, long y, long z, int DelayT = 6);
 void Move_Motor_abs_all(int x, int y, int z, bool IsMsg, int DelayT = 10);
 void Move_Motor_Cont(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep);
 
-#endif 
+#endif

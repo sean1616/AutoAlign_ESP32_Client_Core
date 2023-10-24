@@ -145,10 +145,6 @@ char *UI_Menu_Items[MENU_ITEMS] =
 
 bool plus_minus = false;
 
-
-
-
-
 typedef struct struct_send_message
 {
   String msg;
@@ -181,8 +177,6 @@ typedef struct struct_sendmsg_msg_UI_Data
 struct_send_message sendmsg;
 struct_receive_message incomingReadings;
 struct_sendmsg_msg_UI_Data sendmsg_UI_Data;
-
-
 
 void DataSent_Controller(String MSG)
 {
@@ -281,7 +275,6 @@ void Task_1_sendData(void *pvParameters)
   }
 }
 
-
 #define Enc_X_outputA 12 // 定義 X axis encoder A pin
 #define Enc_X_outputB 14 // 定義 X axis encoder B pin
 #define Enc_Y_outputA 27 // 定義 Y axis encoder A pin
@@ -313,7 +306,6 @@ int Encoder_Motor_Step_Y = 60;
 int Encoder_Motor_Step_Z = 60;
 
 bool isMotorManualCtr = true;
-
 
 // int Encoder_Motor_Step = 60;
 void Task_1_Encoder(void *pvParameters)
@@ -1205,7 +1197,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
   int DIR_Pin = 0; // 0:X, 1:Y, 2:Z
   int STP_Pin = 0;
   int backlash = 0;
-  MotorCC_A = Direction; // initial direction
+  bool MotorCC_A = Direction; // initial direction
   int trip = 1;
   int dataCount = 3;
   int dataCount_ori;
@@ -1262,7 +1254,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
   MSGOutput("isWiFiConnected : " + String(isWiFiConnected));
   CMDOutput(">>" + msg + String(trip));
 
-  double PD_initial = Cal_PD_Input_IL(3);
+  double PD_initial = Get_IL_DAC(3);
   MSGOutput("Initial PD: " + String(PD_initial));
   Serial.println("Pos : " + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + "=" + String(PD_initial));
 
@@ -1332,7 +1324,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
     Move_Motor_abs_all(M(0) + OriginalPos.X, M(1) + OriginalPos.Y, M(2) + OriginalPos.Z, delayBetweenStep); // 初始位移
     // step(STP_Pin, motorStep * count, delayBetweenStep); // First Jump
     delay(250); // Default : 100
-    PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+    PD_Now = Get_IL_DAC(Get_PD_Points);
 
     DataOutput(PD_Now);
     DataOutput(XYZ, PD_Now); // int xyz, double pdValue
@@ -1371,7 +1363,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
   // 建立虛擬點陣列
   for (int i = 0; i < (4 * count + 1); i++)
   {
-    PD_Value[i] = -80;
+    PD_Value[i] = -10000;
 
     if (i == 0)
     {
@@ -1445,7 +1437,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
       delay(30);
 
     // 記錄IL
-    PD_Value[i] = Cal_PD_Input_IL(Get_PD_Points); // 2500
+    PD_Value[i] = Get_IL_DAC(Get_PD_Points); // 2500
 
     Pos_Real[i].X = Pos_Now.X;
     Pos_Real[i].Y = Pos_Now.Y;
@@ -1500,7 +1492,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
               for (int k = -1; k < 2; k++)
               {
                 x[k + 1] = Get_1D_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
-                y[k + 1] = PD_Value[indexofBestIL + k];                    // fill this with your sensor data
+                y[k + 1] = PD_Value[indexofBestIL + k];                     // fill this with your sensor data
               }
 
               if (x[0] == x[1] && x[1] == x[2])
@@ -1580,7 +1572,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
               for (int k = -1; k < 2; k++)
               {
                 x[k + 1] = Get_1D_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
-                y[k + 1] = PD_Value[indexofBestIL + k];                    // fill this with your sensor data
+                y[k + 1] = PD_Value[indexofBestIL + k];                     // fill this with your sensor data
               }
 
               if (x[0] == x[1] && x[1] == x[2])
@@ -1681,7 +1673,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
             for (int k = i - 4; k <= i; k++)
             {
               x[k - (i - 4)] = Get_1D_Position(Pos_Virtual[k], h); // idex * step = real steps
-              y[k - (i - 4)] = PD_Value[k];                       // fill this with your sensor data
+              y[k - (i - 4)] = PD_Value[k];                        // fill this with your sensor data
             }
 
             if (x[0] == x[1] && x[1] == x[2] && x[2] == x[3] && x[3] == x[4])
@@ -1756,84 +1748,84 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
     }
 
     // 結束Trip 1, 進行curfitting
-    if (IL_Best_Trip1 >= -2 && PD_Value[i] <= (IL_Best_Trip1 - 1.5) && Trips == 1 && i > 4)
-    {
-      Serial.println("IL < (IL-1.5): " + String(PD_Value[i]));
+    // if (IL_Best_Trip1 >= -2 && PD_Value[i] <= (IL_Best_Trip1 - 1.5) && Trips == 1 && i > 4)
+    // {
+    //   Serial.println("IL < (IL-1.5): " + String(PD_Value[i]));
 
-      // Curfit
-      if (indexofBestIL != 0 && !Compare_Position(Pos_Best_Trip1, Pos_Now))
-      {
-        for (int h = 0; h <= 2; h++)
-        {
-          double x[3];
-          double y[3];
-          for (int k = -1; k < 2; k++)
-          {
-            x[k + 1] = Get_1D_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
-            y[k + 1] = PD_Value[indexofBestIL + k];                    // fill this with your sensor data
-          }
+    //   // Curfit
+    //   if (indexofBestIL != 0 && !Compare_Position(Pos_Best_Trip1, Pos_Now))
+    //   {
+    //     for (int h = 0; h <= 2; h++)
+    //     {
+    //       double x[3];
+    //       double y[3];
+    //       for (int k = -1; k < 2; k++)
+    //       {
+    //         x[k + 1] = Get_1D_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
+    //         y[k + 1] = PD_Value[indexofBestIL + k];                     // fill this with your sensor data
+    //       }
 
-          if (x[0] == x[1] && x[1] == x[2])
-          {
-            // 軸上的理想點
-            if (h == 0)
-              CurfitPos_OnAxis.X = x[0];
-            else if (h == 1)
-              CurfitPos_OnAxis.Y = x[0];
-            else if (h == 2)
-              CurfitPos_OnAxis.Z = x[0];
-            continue;
-          }
+    //       if (x[0] == x[1] && x[1] == x[2])
+    //       {
+    //         // 軸上的理想點
+    //         if (h == 0)
+    //           CurfitPos_OnAxis.X = x[0];
+    //         else if (h == 1)
+    //           CurfitPos_OnAxis.Y = x[0];
+    //         else if (h == 2)
+    //           CurfitPos_OnAxis.Z = x[0];
+    //         continue;
+    //       }
 
-          if (y[0] == y[1] && y[1] == y[2])
-          {
-            // 軸上的理想點
-            if (h == 0)
-              CurfitPos_OnAxis.X = x[1];
-            else if (h == 1)
-              CurfitPos_OnAxis.Y = x[1];
-            else if (h == 2)
-              CurfitPos_OnAxis.Z = x[1];
-            continue;
-          }
+    //       if (y[0] == y[1] && y[1] == y[2])
+    //       {
+    //         // 軸上的理想點
+    //         if (h == 0)
+    //           CurfitPos_OnAxis.X = x[1];
+    //         else if (h == 1)
+    //           CurfitPos_OnAxis.Y = x[1];
+    //         else if (h == 2)
+    //           CurfitPos_OnAxis.Z = x[1];
+    //         continue;
+    //       }
 
-          long result = Curfit(x, y, 3);
+    //       long result = Curfit(x, y, 3);
 
-          // 若結果超出範圍
-          {
-            if (result < x[0] || result > x[2])
-            {
-              // 軸上的理想點
-              if (h == 0)
-                CurfitPos_OnAxis.X = x[1];
-              else if (h == 1)
-                CurfitPos_OnAxis.Y = x[1];
-              else if (h == 2)
-                CurfitPos_OnAxis.Z = x[1];
+    //       // 若結果超出範圍
+    //       {
+    //         if (result < x[0] || result > x[2])
+    //         {
+    //           // 軸上的理想點
+    //           if (h == 0)
+    //             CurfitPos_OnAxis.X = x[1];
+    //           else if (h == 1)
+    //             CurfitPos_OnAxis.Y = x[1];
+    //           else if (h == 2)
+    //             CurfitPos_OnAxis.Z = x[1];
 
-              // MSGOutput("No fit");
-              MSGOutput("No fit (outrange):" + String(x[1]));
+    //           // MSGOutput("No fit");
+    //           MSGOutput("No fit (outrange):" + String(x[1]));
 
-              continue;
-            }
-          }
+    //           continue;
+    //         }
+    //       }
 
-          // 軸上的理想點
-          if (h == 0)
-            CurfitPos_OnAxis.X = result;
-          else if (h == 1)
-            CurfitPos_OnAxis.Y = result;
-          else if (h == 2)
-            CurfitPos_OnAxis.Z = result;
-        }
+    //       // 軸上的理想點
+    //       if (h == 0)
+    //         CurfitPos_OnAxis.X = result;
+    //       else if (h == 1)
+    //         CurfitPos_OnAxis.Y = result;
+    //       else if (h == 2)
+    //         CurfitPos_OnAxis.Z = result;
+    //     }
 
-        Pos_Best_Trip1 = CurfitPos_OnAxis;
+    //     Pos_Best_Trip1 = CurfitPos_OnAxis;
 
-        MSGOutput("Best curfit IL position in Trip_1 is: " + Show_Position(Pos_Best_Trip1));
-      }
+    //     MSGOutput("Best curfit IL position in Trip_1 is: " + Show_Position(Pos_Best_Trip1));
+    //   }
 
-      break;
-    }
+    //   break;
+    // }
 
     // IL 大於 Stop threshold 判斷
     if (PD_Value[i] >= StopPDValue)
@@ -1847,7 +1839,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
       if ((PD_Value[i] <= PD_Value[i - 1] || abs(PD_Value[i] - PD_Value[i - 1]) <= 0.02) && PD_Value[i] >= -1.8)
       {
         MSGOutput("Over best IL in trip 1");
-        PD_Now = Cal_PD_Input_IL(2 * Get_PD_Points);
+        PD_Now = Get_IL_DAC(2 * Get_PD_Points);
         MSGOutput("Final IL: " + String(PD_Now));
         timer_2 = millis();
         double ts = (timer_2 - timer_1) * 0.001;
@@ -1887,7 +1879,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
         for (int k = -1; k < 2; k++)
         {
           x[k + 1] = Get_1D_Position(Pos_Real[indexofBestIL + k], h); // idex * step = real steps
-          y[k + 1] = PD_Value[indexofBestIL + k];                    // fill this with your sensor data
+          y[k + 1] = PD_Value[indexofBestIL + k];                     // fill this with your sensor data
         }
 
         if (x[0] == x[1] && x[1] == x[2])
@@ -2036,7 +2028,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
       if (i > 1 && PD_Value[i - 1] > -2)
         delay(30);
 
-      PD_Value[i] = Cal_PD_Input_IL(Get_PD_Points);
+      PD_Value[i] = Get_IL_DAC(Get_PD_Points);
 
       if (PD_Value[i] > IL_Best_Trip2)
       {
@@ -2101,7 +2093,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
         {
           // x[k + 1] = Step_Value[indexofBestIL + k]; // idex * step = real steps
           x[k + 1] = Get_1D_Position(Pos_Virtual[indexofBestIL + k], XYZ); // idex * step = real steps
-          y[k + 1] = PD_Value[indexofBestIL + k];                         // fill this with your sensor data
+          y[k + 1] = PD_Value[indexofBestIL + k];                          // fill this with your sensor data
         }
 
         long result = Curfit(x, y, 3);
@@ -2167,7 +2159,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
 
       if (Compare_Position(Pos_Best_Trip1, Pos_Now))
       {
-        PD_Now = Cal_PD_Input_IL(2 * Get_PD_Points);
+        PD_Now = Get_IL_DAC(2 * Get_PD_Points);
 
         timer_2 = millis();
         double ts = (timer_2 - timer_1) * 0.001;
@@ -2187,7 +2179,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
 
         delay(300); // 100
 
-        PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+        PD_Now = Get_IL_DAC(Get_PD_Points);
         DataOutput(PD_Now);
         DataOutput(XYZ, PD_Now); // int xyz, double pdValue
       }
@@ -2199,7 +2191,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
     if (!isTrip3Jump)
     {
       int failCount = 0;
-      double preIL = Cal_PD_Input_IL(Get_PD_Points);
+      double preIL = Get_IL_DAC(Get_PD_Points);
 
       while (true)
       {
@@ -2213,7 +2205,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
 
           Move_Motor(DIR_Pin, STP_Pin, MotorCC_A, motorStep, delayBetweenStep, stableDelay); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
 
-          PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+          PD_Now = Get_IL_DAC(Get_PD_Points);
           DataOutput(XYZ, PD_Now); // int xyz, double pdValue
 
           if (PD_Now >= StopPDValue)
@@ -2247,7 +2239,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
         else if (deltaPos > 0 && deltaPos < motorStep)
         {
           Move_Motor(DIR_Pin, STP_Pin, MotorCC_A, deltaPos, delayBetweenStep, 0); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
-          PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+          PD_Now = Get_IL_DAC(Get_PD_Points);
           DataOutput(XYZ, PD_Now); // int xyz, double pdValue
           break;
         }
@@ -2260,7 +2252,7 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
       Move_Motor_abs_all(BestPosXYZ.X, BestPosXYZ.Y, BestPosXYZ.Z, delayBetweenStep); // Jump to Trip_1 start position
 
       delay(300);
-      PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+      PD_Now = Get_IL_DAC(Get_PD_Points);
       DataOutput(PD_Now);
       DataOutput(XYZ, PD_Now); // int xyz, double pdValue
       MSGOutput("Trip 3 Jump : " + String(Pos_Now.X) + "," + String(Pos_Now.Y) + "," + String(Pos_Now.Z) + "=" + String(PD_initial));
@@ -5284,25 +5276,25 @@ int Function_Classification(String cmd, int ButtonSelected)
     {
       switch (GetPower_Mode)
       {
-        case 1:
-          MSGOutput("IL:" + String(Cal_PD_Input_IL(Get_PD_Points)));
-          break;
+      case 1:
+        MSGOutput("IL:" + String(Cal_PD_Input_IL(Get_PD_Points)));
+        break;
 
-        case 2:
+      case 2:
         MSGOutput("IL:" + String(Cal_PD_Input_Dac(Get_PD_Points)));
-          break;
+        break;
 
-        case 3:
+      case 3:
         MSGOutput("IL:" + String(Cal_PD_Input_Row_IL(Get_PD_Points)));
-          break;
+        break;
 
-        case 4:
-          MSGOutput("IL:" + String(Cal_PD_Input_Row_Dac(Get_PD_Points)));
-          break;
+      case 4:
+        MSGOutput("IL:" + String(Cal_PD_Input_Row_Dac(Get_PD_Points)));
+        break;
 
-        default:
-          MSGOutput("IL:" + String(Cal_PD_Input_IL(Get_PD_Points)));
-          break;
+      default:
+        MSGOutput("IL:" + String(Cal_PD_Input_IL(Get_PD_Points)));
+        break;
       }
     }
 
@@ -5363,7 +5355,7 @@ int Function_Classification(String cmd, int ButtonSelected)
       MotorStepDelayRatio = WR_EEPROM(216, cmd).toDouble();
       MSGOutput("Set_MotorStepDelayRatio:" + String(MotorStepDelayRatio));
     }
-   
+
     // Get IsStop Command
     else if (cmd == "IsStop?")
     {
@@ -5381,11 +5373,13 @@ int Function_Classification(String cmd, int ButtonSelected)
     {
       cmd = ExtractCmd(cmd, "AWO");
 
-      if (Contains(cmd, "1")){
+      if (Contains(cmd, "1"))
+      {
         digitalWrite(AWO_Pin, 0);
         MSGOutput("Motor Driver ON");
       }
-      else if (Contains(cmd, "0")){
+      else if (Contains(cmd, "0"))
+      {
         digitalWrite(AWO_Pin, 1);
         MSGOutput("Motor Driver OFF");
       }
@@ -5768,12 +5762,13 @@ int Function_Classification(String cmd, int ButtonSelected)
       ESP.restart();
     }
 
-     // Clena EEPROM
+    // Clena EEPROM
     else if (Contains(cmd, "CLR_"))
     {
       cmd = ExtractCmd(cmd, "CLR_");
 
-      if(isNumberic(cmd)){
+      if (isNumberic(cmd))
+      {
         int epmP = cmd.toInt();
         CleanEEPROM(epmP, 8); // Clean EEPROM(int startPosition, int datalength)
         WR_EEPROM(cmd.toInt(), "");
@@ -6795,6 +6790,7 @@ int Function_Excecutation(String cmd, int cmd_No)
         while (true)
         {
           MotorCC_A = MotorCC_Z;
+          // digitalRead(Z_DIR_Pin);
           Move_Motor_Cont(Z_DIR_Pin, Z_STP_Pin, true, 100 * MotorStepRatio, delayBetweenStep_Z);
           MotorCC_Z = true;
 
@@ -7372,21 +7368,16 @@ int Function_Excecutation(String cmd, int cmd_No)
           M_Y = {cos(ty), 0, sin(ty), 0, 1, 0, -sin(ty), 0, cos(ty)}; // Rotation Matrix on Y axis
           M_Z = {cos(tz), -sin(tz), 0, sin(tz), cos(tz), 0, 0, 0, 1};
 
+          int ptsPerLoop = 360 / AngleSteps;
+          long stpPerAngle = motorStep / ptsPerLoop;
+
           for (int i = 0; i <= (loops * 360); i = i + AngleSteps)
           {
 
             {
-              // long Targ_X = OriginalPos.X;
-              // long Targ_Y = OriginalPos.Y;
-              // long Targ_Z = OriginalPos.Z;
-
               long Targ_X = 0;
               long Targ_Y = 0;
               long Targ_Z = 0;
-
-              // long Targ_X = R * (cos(i * (PI / 180.0)) + OriginalPos.X);
-              // long Targ_Y = R * (cos(i * (PI / 180.0))) + OriginalPos.Y;
-              // long Targ_Z = R * (sin(i * (PI / 180.0))) + OriginalPos.Z;
 
               // 分量計算
               if (spiPlane == XY)
@@ -7405,9 +7396,6 @@ int Function_Excecutation(String cmd, int cmd_No)
                 Targ_Z = R * (sin(i * (PI / 180.0)));
               }
 
-              // if (i % 20 == 0)
-              //   Serial.println("TargS : " + String(Targ_X) + "," + String(Targ_Y) + "," + String(Targ_Z));
-
               M_A = {Targ_X, Targ_Y, Targ_Z};
 
               // 旋轉
@@ -7417,44 +7405,17 @@ int Function_Excecutation(String cmd, int cmd_No)
               Targ_Y = M(1);
               Targ_Z = M(2);
 
-              // if (i % 20 == 0)
-              //   Serial.println("TargS : " + String(Targ_X) + "," + String(Targ_Y) + "," + String(Targ_Z));
-
               // 加上初始點位移量
               Targ_X += OriginalPos.X;
               Targ_Y += OriginalPos.Y;
               Targ_Z += OriginalPos.Z;
-
-                // MSGOutput("MMM:" + String(Targ_X) + "," + String(Targ_Y) + "," + String(Targ_Z));
-
-              // if (i % 20 == 0)
-              //   Serial.println("TargM : " + String(Targ_X) + "," + String(Targ_Y) + "," + String(Targ_Z));
-
-              // if (spiPlane == XY)
-              // {
-              //   Targ_X = Targ_X;
-              //   Targ_Y = R * (cos(i * (PI / 180.0))) + Targ_Y;
-              // }
-              // else if (spiPlane == YZ)
-              // {
-              //   Targ_Y = R * (cos(i * (PI / 180.0))) + Targ_Y;
-              //   Targ_Z = R * (sin(i * (PI / 180.0))) + Targ_Z;
-              // }
-              // else if (spiPlane == XZ)
-              // {
-              //   Targ_X = R * (cos(i * (PI / 180.0))) + Targ_X;
-              //   Targ_Z = R * (sin(i * (PI / 180.0))) + Targ_Z;
-              // }
 
               Move_Motor_abs_all(Targ_X, Targ_Y, Targ_Z, delay_btw_steps);
 
               if (stableDelay > 0)
                 delay(stableDelay);
 
-              PD_Now = Cal_PD_Input_IL(1);
-              // PD_Now = Cal_PD_Input_Row_Dac(Get_PD_Points);
-
-              // PD_Now = Cal_PD_Input_Row_Dac(1);  //default
+              PD_Now = Get_IL_DAC(1);
 
               if (PD_Now > BestIL)
               {
@@ -7475,7 +7436,7 @@ int Function_Excecutation(String cmd, int cmd_No)
 
               // break;
 
-              R += motorStep;
+              R += stpPerAngle; // motorStep
             }
 
             if (isStop)
@@ -7557,11 +7518,12 @@ void CheckStop()
     //   Serial.println("EmergencyStop");
     //   // EmergencyStop();
     // }
-    if (Contains(cmd, "cmd30")){
-    isStop = true;
+    if (Contains(cmd, "cmd30"))
+    {
+      isStop = true;
 
-    Serial.println("EmergencyStop");
-    // EmergencyStop();
+      Serial.println("EmergencyStop");
+      // EmergencyStop();
     }
     else
     {
@@ -7632,8 +7594,6 @@ String Show_Position(struct_Motor_Pos Pos)
 {
   return String(Pos.X) + "," + String(Pos.Y) + "," + String(Pos.Z);
 }
-
-
 
 bool isNumberic(String str)
 {
