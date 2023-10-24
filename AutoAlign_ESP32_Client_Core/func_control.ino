@@ -158,11 +158,11 @@ void step(byte stepperPin, long steps, int delayTime)
     digitalWrite(stepperPin, HIGH);
     delayMicroseconds(delayTime);
     digitalWrite(stepperPin, LOW);
-    delayMicroseconds(delayTime);    
+    delayMicroseconds(delayTime);
 
-    if(isStop) 
+    if (isStop)
     {
-      steps -= (i+1);
+      steps -= (i + 1);
       break;
     }
   }
@@ -239,9 +239,9 @@ void step(byte stepperPin, long steps, int delayTime, byte dirPin, bool dir)
     digitalWrite(stepperPin, LOW);
     delayMicroseconds(delayTime);
 
-    if(isStop) 
+    if (isStop)
     {
-      steps -= (i+1);
+      steps -= (i + 1);
       break;
     }
   }
@@ -488,31 +488,35 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT)
   long Delta_Y = TargetPos.Y - Pos_Now.Y;
   long Delta_Z = TargetPos.Z - Pos_Now.Z;
 
+  bool DIRX = false;
+  bool DIRY = false;
+  bool DIRZ = false;
+
   // 判斷方向
   if (Delta_X > 0)
-    MotorCC_X = true;
+    DIRX = true;
   else if (Delta_X < 0)
-    MotorCC_X = false;
+    DIRX = false;
 
   if (Delta_Y > 0)
-    MotorCC_Y = true;
+    DIRY = true;
   else if (Delta_Y < 0)
-    MotorCC_Y = false;
+    DIRY = false;
 
   if (Delta_Z > 0)
-    MotorCC_Z = true;
+    DIRZ = true;
   else if (Delta_Z < 0)
-    MotorCC_Z = false;
+    DIRZ = false;
 
   // 設定軸方向
   if (Delta_X != 0)
-    digitalWrite(X_DIR_Pin, MotorCC_X);
+    digitalWrite(X_DIR_Pin, DIRX);
 
   if (Delta_Y != 0)
-    digitalWrite(Y_DIR_Pin, MotorCC_Y);
+    digitalWrite(Y_DIR_Pin, DIRY);
 
   if (Delta_Z != 0)
-    digitalWrite(Z_DIR_Pin, MotorCC_Z);
+    digitalWrite(Z_DIR_Pin, DIRZ);
 
   // delayMicroseconds(300);
   // delay(3);
@@ -618,7 +622,7 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT)
     if (Count_Step > ratio_max)
       Count_Step = Count_Step % ratio_max;
 
-    if(isStop)
+    if (isStop)
       return;
   }
 
