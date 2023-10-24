@@ -4762,7 +4762,7 @@ int Function_Classification(String cmd, int ButtonSelected)
   if (cmd != "" && ButtonSelected < 0)
   {
     cmd.trim();
-    MSGOutput("get_cmd:" + String(cmd));
+    // MSGOutput("get_cmd:" + String(cmd));
 
     String cmdUpper = cmd;
     cmdUpper.toUpperCase();
@@ -5282,7 +5282,28 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Get IL Command
     else if (cmd == "IL?")
     {
-      MSGOutput("IL:" + String(Cal_PD_Input_IL(Get_PD_Points)));
+      switch (GetPower_Mode)
+      {
+        case 1:
+          MSGOutput("IL:" + String(Cal_PD_Input_IL(Get_PD_Points)));
+          break;
+
+        case 2:
+        MSGOutput("IL:" + String(Cal_PD_Input_Dac(Get_PD_Points)));
+          break;
+
+        case 3:
+        MSGOutput("IL:" + String(Cal_PD_Input_Row_IL(Get_PD_Points)));
+          break;
+
+        case 4:
+          MSGOutput("IL:" + String(Cal_PD_Input_Row_Dac(Get_PD_Points)));
+          break;
+
+        default:
+          MSGOutput("IL:" + String(Cal_PD_Input_IL(Get_PD_Points)));
+          break;
+      }
     }
 
     // Get Ref Command
@@ -6667,9 +6688,9 @@ int Function_Excecutation(String cmd, int cmd_No)
         cmd_No = 0;
         break;
 
-      case 24: /* Get Power Mode: Dac */
+      case 24: /* Get Power Mode: IL Dac */
         GetPower_Mode = 2;
-        Serial.println("Cmd: Get Power Mode: Dac");
+        Serial.println("Cmd: Get Power Mode: IL Dac");
         cmd_No = 0;
         break;
 
