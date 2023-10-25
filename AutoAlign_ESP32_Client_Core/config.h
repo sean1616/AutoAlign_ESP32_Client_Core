@@ -4,7 +4,7 @@
 #include "Arduino.h"
 #include "ep_adrs.h"
 
-/// @brief 0 is CTF, 1 is VOA-Heater, 2 is VOA-No Heater, 3 is 3D Switch
+/// @brief 0 is CTF, 1 is VOA-Heater, 2 is VOA-No Heater, 3 is 3D Switch/WOA
 byte Station_Type = 0;
 
 const byte X_STP_Pin = 15; // x軸 步進控制Pulse
@@ -200,12 +200,21 @@ bool sprial_JumpToBest = true;
 int Q_State = 0;
 unsigned long Q_Time = 0;
 unsigned long LCD_Auto_Update_TimeCount = 0;
+
+// 1:IL, 2:Dac(- ref), 3:Row IL(dBm), 4:Row Dac
 byte GetPower_Mode = 1;
 bool is_Scan_V2_ReWork = false;
 bool is_AutoCuring = false;
 bool isTrip3Jump = true; // If station is high resolution , this value could be true;
 bool isWatchDog_Flag = false;
 bool isLCD_Auto_Update = false;
+
+bool X_DIR_True = true;
+bool X_DIR_False = false;
+bool Y_DIR_True = true;
+bool Y_DIR_False = false;
+bool Z_DIR_True = true;
+bool Z_DIR_False = false;
 
 uint16_t FS_Count_X = 7;
 uint16_t FS_Steps_X = 25;

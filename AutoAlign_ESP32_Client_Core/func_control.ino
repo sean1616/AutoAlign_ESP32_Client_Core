@@ -331,6 +331,12 @@ void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delay
   if (moveSteps > 0)
   {
     // MotorCC_A = dirt;
+
+    // if(dir_pin == X_DIR_Pin){
+    //     if (dirt)
+    //       dirt = Z_DIR_False;
+    // }
+
     digitalWrite(dir_pin, dirt);
     delay(pinDelay);
 
@@ -574,7 +580,7 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT)
 
   if (MoveAxisCount == 0)
   {
-    MSGOutput("Delta Distance All 0");
+    MSGOutput("Delta Dist. 0");
     return;
   }
 
@@ -687,12 +693,27 @@ void Move_Motor_Cont(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int 
 {
   MotorSTP_Pin = dir_pin;
 
-  if (MotorDir_Pin != dir_pin || MotorCC_A != dirt)
+  bool dirNow = false;
+
+  if (stp_pin == X_STP_Pin)
   {
-    MotorCC_A = dirt;
+    dirNow = digitalRead(X_DIR_Pin);
+  }
+  else if (stp_pin == Y_STP_Pin)
+  {
+    dirNow = digitalRead(Y_DIR_Pin);
+  }
+  else if (stp_pin == Z_STP_Pin)
+  {
+    dirNow = digitalRead(Z_DIR_Pin);
+  }
+
+  if (dirNow != dirt)
+  {
+    // MotorCC_A = dirt;
     MotorDir_Pin = dir_pin;
-    digitalWrite(MotorDir_Pin, MotorCC_A); // 步進馬達方向控制, false為負方向
-    delay(3);
+    digitalWrite(dir_pin, dirt); // 步進馬達方向控制, false為負方向
+    delay(8);
   }
 
   step(stp_pin, moveSteps, delayStep);

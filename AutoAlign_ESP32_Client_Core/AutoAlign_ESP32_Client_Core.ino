@@ -44,8 +44,8 @@ void CleanEEPROM(int startPosition, int datalength)
 {
   for (size_t i = startPosition; i < (startPosition + datalength); i++)
   {
-    // EEPROM.write(i, ' ');
-    EEPROM.write(i, 0);
+    EEPROM.write(i, ' ');
+    // EEPROM.write(i, 0);
   }
 }
 
@@ -277,7 +277,7 @@ void Task_1_sendData(void *pvParameters)
 
 #define Enc_X_outputA 12 // 定義 X axis encoder A pin
 #define Enc_X_outputB 14 // 定義 X axis encoder B pin
-#define Enc_Y_outputA 27 // 定義 Y axis encoder A pin
+#define Enc_Y_outputA 27 // 定義 Y axis encoder A pinDIR_True
 #define Enc_Y_outputB 26 // 定義 Y axis encoder B pin
 #define Enc_Z_outputA 25 // 定義 Z axis encoder A pin
 #define Enc_Z_outputB 33 // 定義 Z axis encoder B pin
@@ -290,12 +290,12 @@ int aLastState_Y; // 定義 aLastState 為 int 類型變數
 int aState_Z;     // 定義 aState 為 int 類型變數
 int aLastState_Z; // 定義 aLastState 為 int 類型變數
 
-bool X_DIR_True = true;
-bool X_DIR_False = false;
-bool Y_DIR_True = true;
-bool Y_DIR_False = false;
-bool Z_DIR_True = true;
-bool Z_DIR_False = false;
+// bool X_DIR_True = true;
+// bool X_DIR_False = false;
+// bool Y_DIR_True = true;
+// bool Y_DIR_False = false;
+// bool Z_DIR_True = true;
+// bool Z_DIR_False = false;
 
 int IsDirtReverse_X = 0;
 int IsDirtReverse_Y = 0;
@@ -2720,6 +2720,9 @@ void setup()
       Z_DIR_False = true;
     }
 
+    GetPower_Mode = 4;
+    MSGOutput("Set GetPowerMode is :" + String(GetPower_Mode));
+
     // 在core 0啟動 Task_2_sendData (接收遙控盒訊息)
     xTaskCreatePinnedToCore(
         Task_1_Encoder, /* 任務實際對應的Function */
@@ -4763,12 +4766,12 @@ int Function_Classification(String cmd, int ButtonSelected)
 #pragma region - Keyboard - Motor Control
     if (cmd == "Xp")
     {
-      cmd_No = 102;
+      cmd_No = 105;
       return cmd_No;
     }
     else if (cmd == "Xm")
     {
-      cmd_No = 105;
+      cmd_No = 102;
       return cmd_No;
     }
     else if (cmd == "Yp")
@@ -4795,7 +4798,8 @@ int Function_Classification(String cmd, int ButtonSelected)
     // Jog
     else if (Contains(cmd, "Jog_"))
     {
-      cmd.remove(0, 4);
+      // cmd.remove(0, 4);
+      cmd = ExtractCmd(cmd, "Jog_");
 
       byte dirPin, stpPin;
       bool dirt;
@@ -4806,17 +4810,32 @@ int Function_Classification(String cmd, int ButtonSelected)
         dirPin = X_DIR_Pin;
         stpPin = X_STP_Pin;
         delayNow = delayBetweenStep_X;
+
+        // if (Contains(cmd, "m"))
+        //   dirt = X_DIR_False;
+        // else if (Contains(cmd, "p"))
+        //   dirt = X_DIR_True;
       }
       else if (Contains(cmd, "Y"))
       {
         dirPin = Y_DIR_Pin;
         stpPin = Y_STP_Pin;
+
+        // if (Contains(cmd, "m"))
+        //   dirt = Y_DIR_False;
+        // else if (Contains(cmd, "p"))
+        //   dirt = Y_DIR_True;
       }
       else if (Contains(cmd, "Z"))
       {
         dirPin = Z_DIR_Pin;
         stpPin = Z_STP_Pin;
         delayNow = delayBetweenStep_Z;
+
+        // if (Contains(cmd, "m"))
+        //   dirt = Z_DIR_False;
+        // else if (Contains(cmd, "p"))
+        //   dirt = Z_DIR_True;
       }
 
       cmd.remove(0, 1);
@@ -6754,25 +6773,6 @@ int Function_Excecutation(String cmd, int cmd_No)
           Move_Motor_Cont(Z_DIR_Pin, Z_STP_Pin, false, 100 * MotorStepRatio, delayBetweenStep_Z);
           MotorCC_Z = false;
 
-          // if (Motor_Continous_Mode == 1)
-          // {
-          //   // if (digitalRead(R_3)) break;
-          // }
-          // else if (Motor_Continous_Mode == 2)
-          // {
-          //   if (Serial.available())
-          //   {
-          //     String msg = Serial.readString();
-          //     if (Contains(msg, "0"))
-          //       break;
-          //   }
-          // }
-          // else if (Motor_Continous_Mode == 3)
-          // {
-          //   if (Motor_Feed_Mode_StopJudge())
-          //     break;
-          // }
-
           if (isStop)
           {
             isStop = false;
@@ -6789,29 +6789,9 @@ int Function_Excecutation(String cmd, int cmd_No)
       case 103:
         while (true)
         {
-          MotorCC_A = MotorCC_Z;
-          // digitalRead(Z_DIR_Pin);
+          // MotorCC_A = MotorCC_Z;
           Move_Motor_Cont(Z_DIR_Pin, Z_STP_Pin, true, 100 * MotorStepRatio, delayBetweenStep_Z);
-          MotorCC_Z = true;
-
-          // if (Motor_Continous_Mode == 1)
-          // {
-          //   // if (digitalRead(R_3)) break;
-          // }
-          // else if (Motor_Continous_Mode == 2)
-          // {
-          //   if (Serial.available())
-          //   {
-          //     String msg = Serial.readString();
-          //     if (Contains(msg, "0"))
-          //       break;
-          //   }
-          // }
-          // else if (Motor_Continous_Mode == 3)
-          // {
-          //   if (Motor_Feed_Mode_StopJudge())
-          //     break;
-          // }
+          // MotorCC_Z = true;
 
           if (isStop)
           {
@@ -6833,25 +6813,6 @@ int Function_Excecutation(String cmd, int cmd_No)
           Move_Motor_Cont(X_DIR_Pin, X_STP_Pin, false, 100 * MotorStepRatio, delayBetweenStep_X);
           MotorCC_X = false;
 
-          // if (Motor_Continous_Mode == 1)
-          // {
-          //   // if (digitalRead(R_3)) break;
-          // }
-          // else if (Motor_Continous_Mode == 2)
-          // {
-          //   if (Serial.available())
-          //   {
-          //     String msg = Serial.readString();
-          //     if (Contains(msg, "0"))
-          //       break;
-          //   }
-          // }
-          // else if (Motor_Continous_Mode == 3)
-          // {
-          //   if (Motor_Feed_Mode_StopJudge())
-          //     break;
-          // }
-
           if (isStop)
           {
             isStop = false;
@@ -6869,25 +6830,6 @@ int Function_Excecutation(String cmd, int cmd_No)
           MotorCC_A = MotorCC_X;
           Move_Motor_Cont(X_DIR_Pin, X_STP_Pin, true, 100 * MotorStepRatio, delayBetweenStep_X);
           MotorCC_X = true;
-
-          //   if (Motor_Continous_Mode == 1)
-          //   {
-          //     // if (digitalRead(R_2)) break;
-          //   }
-          //   else if (Motor_Continous_Mode == 2)
-          //   {
-          //     if (Serial.available())
-          //     {
-          //       String msg = Serial.readString();
-          //       if (Contains(msg, "0"))
-          //         break;
-          //     }
-          //   }
-          //   else if (Motor_Continous_Mode == 3)
-          //   {
-          //     if (Motor_Feed_Mode_StopJudge())
-          //       break;
-          //   }
 
           if (isStop)
           {
@@ -6909,25 +6851,6 @@ int Function_Excecutation(String cmd, int cmd_No)
           Move_Motor_Cont(Y_DIR_Pin, Y_STP_Pin, false, 100 * MotorStepRatio, delayBetweenStep_Y);
           MotorCC_Y = false;
 
-          // if (Motor_Continous_Mode == 1)
-          // {
-          //   // if (digitalRead(R_2)) break;
-          // }
-          // else if (Motor_Continous_Mode == 2)
-          // {
-          //   if (Serial.available())
-          //   {
-          //     String msg = Serial.readString();
-          //     if (Contains(msg, "0"))
-          //       break;
-          //   }
-          // }
-          // else if (Motor_Continous_Mode == 3)
-          // {
-          //   if (Motor_Feed_Mode_StopJudge())
-          //     break;
-          // }
-
           if (isStop)
           {
             isStop = false;
@@ -6947,25 +6870,6 @@ int Function_Excecutation(String cmd, int cmd_No)
           MotorCC_A = MotorCC_Y;
           Move_Motor_Cont(Y_DIR_Pin, Y_STP_Pin, true, 100 * MotorStepRatio, delayBetweenStep_Y);
           MotorCC_Y = true;
-
-          // if (Motor_Continous_Mode == 1)
-          // {
-          //   // if (digitalRead(R_2)) break;
-          // }
-          // else if (Motor_Continous_Mode == 2)
-          // {
-          //   if (Serial.available())
-          //   {
-          //     String msg = Serial.readString();
-          //     if (Contains(msg, "0"))
-          //       break;
-          //   }
-          // }
-          // else if (Motor_Continous_Mode == 3)
-          // {
-          //   if (Motor_Feed_Mode_StopJudge())
-          //     break;
-          // }
 
           if (isStop)
           {
