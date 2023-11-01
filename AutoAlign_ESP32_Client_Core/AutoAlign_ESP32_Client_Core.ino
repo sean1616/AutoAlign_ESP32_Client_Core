@@ -1418,6 +1418,12 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
     if (i == 0)
     {
       PD_Value[i] = PD_Now;
+
+      // 記錄位置
+      Pos_Real[i].X = Pos_Now.X;
+      Pos_Real[i].Y = Pos_Now.Y;
+      Pos_Real[i].Z = Pos_Now.Z;
+
       continue;
     }
 
@@ -1439,11 +1445,10 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
     // 記錄IL
     PD_Value[i] = Get_IL_DAC(Get_PD_Points); // 2500
 
+    // 記錄位置
     Pos_Real[i].X = Pos_Now.X;
     Pos_Real[i].Y = Pos_Now.Y;
     Pos_Real[i].Z = Pos_Now.Z;
-
-    // 記錄位置
     // Get_Position(Pos_Real[i]);
 
     if (PD_Value[i] > IL_Best_Trip1)
@@ -1607,9 +1612,30 @@ bool Line_Scan_3D(int XYZ, int count, int motorStep, int stableDelay,
 
               long result = Curfit(x, y, 3);
 
+              MSGOutput("FitArray_Pos:" + String(x[0]) + ", " + String(x[1]) + ", " + String(x[2]));
+
               // 若結果超出範圍
               {
                 if (result < x[0] || result > x[2])
+                {
+                  // 軸上的理想點
+                  if (h == 0)
+                    CurfitPos_OnAxis.X = x[1];
+                  else if (h == 1)
+                    CurfitPos_OnAxis.Y = x[1];
+                  else if (h == 2)
+                    CurfitPos_OnAxis.Z = x[1];
+
+                  // MSGOutput("No fit");
+                  MSGOutput("No fit (outrange):" + String(x[1]));
+
+                  continue;
+                }
+
+                if (result >= x[0] && result <= x[2])
+                {
+                }
+                else
                 {
                   // 軸上的理想點
                   if (h == 0)
@@ -5193,22 +5219,11 @@ int Function_Classification(String cmd, int ButtonSelected)
     {
       if (Contains(cmd, "X"))
       {
-        cmd.remove(0, 4);
+        cmd.remove(0, 5);
 
         X_backlash = cmd.toInt();
 
-        CleanEEPROM(24, 8); // Clean EEPROM(int startPosition, int datalength)
-
-        WriteInfoEEPROM(String(cmd), 24); //(data, start_position)  // Write Data to EEPROM
-
-        EEPROM.commit();
-
-        Serial.println("Set X BackLash: " + String(String(cmd)));
-
-        // Reading Data from EEPROM
-        Serial.println("X BackLash in eeprom: " + ReadInfoEEPROM(24, 8)); //(start_position, data_length)
-
-        X_backlash = ReadInfoEEPROM(24, 8).toInt();
+        MSGOutput("Set X BackLash: " + WR_EEPROM(EP_X_backlash, cmd));
       }
 
       else if (Contains(cmd, "Y"))
@@ -5217,17 +5232,7 @@ int Function_Classification(String cmd, int ButtonSelected)
 
         Y_backlash = cmd.toInt();
 
-        CleanEEPROM(32, 8); // Clean EEPROM(int startPosition, int datalength)
-
-        WriteInfoEEPROM(String(cmd), 32); //(data, start_position)  // Write Data to EEPROM
-
-        EEPROM.commit();
-
-        Serial.println("Set Y BackLash: " + String(String(cmd)));
-
-        Serial.println("Y BackLash in eeprom: " + ReadInfoEEPROM(32, 8)); //(start_position, data_length)
-
-        Y_backlash = ReadInfoEEPROM(32, 8).toInt();
+        MSGOutput("Set Y BackLash: " + WR_EEPROM(EP_Y_backlash, cmd));
       }
 
       else if (Contains(cmd, "Z"))
@@ -5236,59 +5241,49 @@ int Function_Classification(String cmd, int ButtonSelected)
 
         Z_backlash = cmd.toInt();
 
-        CleanEEPROM(40, 8); // Clean EEPROM(int startPosition, int datalength)
-
-        WriteInfoEEPROM(String(cmd), 40); //(data, start_position)  // Write Data to EEPROM
-
-        EEPROM.commit();
-
-        Serial.println("Set Z BackLash: " + String(String(cmd)));
-
-        Serial.println("Z BackLash in eeprom: " + ReadInfoEEPROM(40, 8)); //(start_position, data_length)
-
-        Z_backlash = ReadInfoEEPROM(40, 8).toInt();
+        MSGOutput("Set Z BackLash: " + WR_EEPROM(EP_Z_backlash, cmd));
       }
     }
-
+    //
     // Set Scan Steps Command
-    else if (Contains(cmd, "_ScanSTP:"))
-    {
-      if (Contains(cmd, "X"))
-      {
-        cmd.remove(0, 9);
-        cmd.trim();
+    // else if (Contains(cmd, "_ScanSTP:"))
+    // {
+    //   if (Contains(cmd, "X"))
+    //   {
+    //     cmd.remove(0, 9);
+    //     cmd.trim();
 
-        X_ScanSTP = cmd.toInt();
+    //     X_ScanSTP = cmd.toInt();
 
-        CleanEEPROM(48, 8);                                         // Clean EEPROM(int startPosition, int datalength)
-        WriteInfoEEPROM(String(cmd), 48);                           //(data, start_position)  // Write Data to EEPROM
-        Serial.println("Save in eeprom: " + ReadInfoEEPROM(48, 8)); //(start_position, data_length)
+    //     CleanEEPROM(48, 8);                                         // Clean EEPROM(int startPosition, int datalength)
+    //     WriteInfoEEPROM(String(cmd), 48);                           //(data, start_position)  // Write Data to EEPROM
+    //     Serial.println("Save in eeprom: " + ReadInfoEEPROM(48, 8)); //(start_position, data_length)
 
-        Serial.println("Set X Scan Step: " + String(X_ScanSTP));
-      }
-      else if (Contains(cmd, "Y"))
-      {
-        cmd.remove(0, 10);
-        Y_ScanSTP = cmd.toInt();
+    //     Serial.println("Set X Scan Step: " + String(X_ScanSTP));
+    //   }
+    //   else if (Contains(cmd, "Y"))
+    //   {
+    //     cmd.remove(0, 10);
+    //     Y_ScanSTP = cmd.toInt();
 
-        CleanEEPROM(56, 8);                                         // Clean EEPROM(int startPosition, int datalength)
-        WriteInfoEEPROM(String(cmd), 56);                           //(data, start_position)  // Write Data to EEPROM
-        Serial.println("Save in eeprom: " + ReadInfoEEPROM(56, 8)); //(start_position, data_length)
+    //     CleanEEPROM(56, 8);                                         // Clean EEPROM(int startPosition, int datalength)
+    //     WriteInfoEEPROM(String(cmd), 56);                           //(data, start_position)  // Write Data to EEPROM
+    //     Serial.println("Save in eeprom: " + ReadInfoEEPROM(56, 8)); //(start_position, data_length)
 
-        Serial.println("Set Y Scan Step: " + String(String(cmd)));
-      }
-      else if (Contains(cmd, "Z"))
-      {
-        cmd.remove(0, 10);
-        Z_ScanSTP = cmd.toInt();
+    //     Serial.println("Set Y Scan Step: " + String(String(cmd)));
+    //   }
+    //   else if (Contains(cmd, "Z"))
+    //   {
+    //     cmd.remove(0, 10);
+    //     Z_ScanSTP = cmd.toInt();
 
-        CleanEEPROM(64, 8);                                         // Clean EEPROM(int startPosition, int datalength)
-        WriteInfoEEPROM(String(cmd), 64);                           //(data, start_position)  // Write Data to EEPROM
-        Serial.println("Save in eeprom: " + ReadInfoEEPROM(64, 8)); //(start_position, data_length)
+    //     CleanEEPROM(64, 8);                                         // Clean EEPROM(int startPosition, int datalength)
+    //     WriteInfoEEPROM(String(cmd), 64);                           //(data, start_position)  // Write Data to EEPROM
+    //     Serial.println("Save in eeprom: " + ReadInfoEEPROM(64, 8)); //(start_position, data_length)
 
-        Serial.println("Set Z Scan Step: " + String(String(cmd)));
-      }
-    }
+    //     Serial.println("Set Z Scan Step: " + String(String(cmd)));
+    //   }
+    // }
 
     // Get IL Command
     else if (cmd == "IL?")
@@ -5337,13 +5332,13 @@ int Function_Classification(String cmd, int ButtonSelected)
     {
       cmd = ExtractCmd(cmd, "Set_Ref:");
 
-      CleanEEPROM(0, 8);               // Clean EEPROM(int startPosition, int datalength)
-      WriteInfoEEPROM(String(cmd), 0); //(data, start_position)  // Write Data to EEPROM
+      // Serial.printf("Update Ref Value : %s\n", cmd);
+
+      CleanEEPROM(EP_PD_Ref, 8);               // Clean EEPROM(int startPosition, int datalength)
+      WriteInfoEEPROM(String(cmd), EP_PD_Ref); //(data, start_position)  // Write Data to EEPROM
       EEPROM.commit();
 
-      Serial.printf("Update Ref Value : %s\n", cmd);
-
-      String eepromString = ReadInfoEEPROM(0, 8); //(int start_position, int data_length)
+      String eepromString = ReadInfoEEPROM(EP_PD_Ref, 8); //(int start_position, int data_length)
 
       Serial.printf("PD ref: %s\n", eepromString);
 
@@ -5376,10 +5371,10 @@ int Function_Classification(String cmd, int ButtonSelected)
     }
 
     // Get IsStop Command
-    else if (cmd == "IsStop?")
-    {
-      MSGOutput("IsStop:" + String(isStop));
-    }
+    // else if (cmd == "IsStop?")
+    // {
+    //   MSGOutput("IsStop:" + String(isStop));
+    // }
 
     // Get Motor position now
     else if (Contains(cmd, "POS?"))
@@ -5413,23 +5408,26 @@ int Function_Classification(String cmd, int ButtonSelected)
       {
         cmd.remove(0, 2); // Include empty char deleted
         delayBetweenStep_X = cmd.toInt();
-        WR_EEPROM(48, cmd);
+        WR_EEPROM(EP_delayBetweenStep_X, cmd);
+        MSGOutput("Set Motor X Speed:" + cmd);
       }
       else if (Contains(cmd, "Y"))
       {
         cmd.remove(0, 2); // Include empty char deleted
         delayBetweenStep_Y = cmd.toInt();
-        WR_EEPROM(56, cmd);
+        WR_EEPROM(EP_delayBetweenStep_Y, cmd);
+        MSGOutput("Set Motor Y Speed:" + cmd);
       }
       else if (Contains(cmd, "Z"))
       {
         cmd.remove(0, 2); // Include empty char deleted
         delayBetweenStep_Z = cmd.toInt();
-        WR_EEPROM(64, cmd);
+        WR_EEPROM(EP_delayBetweenStep_Z, cmd);
+        MSGOutput("Set Motor Z Speed:" + cmd);
       }
       else if (Contains(cmd, "?"))
       {
-        MSGOutput("Motor Speed (x, y, z): (" + ReadInfoEEPROM(48, 8) + "," + ReadInfoEEPROM(56, 8) + "," + ReadInfoEEPROM(64, 8) + ")");
+        MSGOutput("Motor Speed (x, y, z): (" + ReadInfoEEPROM(EP_delayBetweenStep_X, 8) + "," + ReadInfoEEPROM(EP_delayBetweenStep_Y, 8) + "," + ReadInfoEEPROM(EP_delayBetweenStep_Z, 8) + ")");
       }
       else
       {
@@ -5440,40 +5438,39 @@ int Function_Classification(String cmd, int ButtonSelected)
         WR_EEPROM(EP_delayBetweenStep_X, cmd);
         WR_EEPROM(EP_delayBetweenStep_Y, cmd);
         WR_EEPROM(EP_delayBetweenStep_Z, cmd);
+        MSGOutput("Set Motor Speed:" + cmd);
       }
-
-      MSGOutput("Set Motor Speed:" + cmd);
     }
 
     // Set Manual Control Motor Speed
-    else if (Contains(cmd, "Set_Motor_Speed_"))
-    {
-      cmd = ExtractCmd(cmd, "Set_Motor_Speed_");
+    // else if (Contains(cmd, "Set_Motor_Speed_"))
+    // {
+    //   cmd = ExtractCmd(cmd, "Set_Motor_Speed_");
 
-      if (Contains(cmd, "X"))
-      {
-        cmd.remove(0, 2);
-        cmd.trim();
-        delayBetweenStep_X = cmd.toInt();
-        WR_EEPROM(EP_delayBetweenStep_X, cmd);
-      }
-      else if (Contains(cmd, "Y"))
-      {
-        cmd.remove(0, 2);
-        cmd.trim();
-        delayBetweenStep_Y = cmd.toInt();
-        WR_EEPROM(EP_delayBetweenStep_Y, cmd);
-      }
-      else if (Contains(cmd, "Z"))
-      {
-        cmd.remove(0, 2);
-        cmd.trim();
-        delayBetweenStep_Z = cmd.toInt();
-        WR_EEPROM(EP_delayBetweenStep_Z, cmd);
-      }
+    //   if (Contains(cmd, "X"))
+    //   {
+    //     cmd.remove(0, 2);
+    //     cmd.trim();
+    //     delayBetweenStep_X = cmd.toInt();
+    //     WR_EEPROM(EP_delayBetweenStep_X, cmd);
+    //   }
+    //   else if (Contains(cmd, "Y"))
+    //   {
+    //     cmd.remove(0, 2);
+    //     cmd.trim();
+    //     delayBetweenStep_Y = cmd.toInt();
+    //     WR_EEPROM(EP_delayBetweenStep_Y, cmd);
+    //   }
+    //   else if (Contains(cmd, "Z"))
+    //   {
+    //     cmd.remove(0, 2);
+    //     cmd.trim();
+    //     delayBetweenStep_Z = cmd.toInt();
+    //     WR_EEPROM(EP_delayBetweenStep_Z, cmd);
+    //   }
 
-      MSGOutput("Set Motor Speed:" + cmd);
-    }
+    //   MSGOutput("Set Motor Speed:" + cmd);
+    // }
 
     // Set Manual-Encoder Control Motor Speed
     else if (Contains(cmd, "DIR"))
@@ -5485,33 +5482,72 @@ int Function_Classification(String cmd, int ButtonSelected)
         cmd.remove(0, 2); // Include empty char deleted
         IsDirtReverse_X = cmd.toInt();
         WR_EEPROM(EP_Motor_DIR_X, cmd);
+        MSGOutput("Set Motor X DIR:" + cmd);
       }
       else if (Contains(cmd, "Y"))
       {
         cmd.remove(0, 2); // Include empty char deleted
         IsDirtReverse_Y = cmd.toInt();
         WR_EEPROM(EP_Motor_DIR_Y, cmd);
+        MSGOutput("Set Motor Y DIR:" + cmd);
       }
       else if (Contains(cmd, "Z"))
       {
         cmd.remove(0, 2); // Include empty char deleted
         IsDirtReverse_Z = cmd.toInt();
         WR_EEPROM(EP_Motor_DIR_Z, cmd);
+        MSGOutput("Set Motor Z DIR:" + cmd);
       }
       else if (Contains(cmd, "?"))
       {
-        Serial.println("DIR (x, y, z): (" + ReadInfoEEPROM(EP_Motor_DIR_X, 8) + "," + ReadInfoEEPROM(EP_Motor_DIR_Y, 8) + "," + ReadInfoEEPROM(EP_Motor_DIR_Z, 8) + ")");
+        MSGOutput("DIR (x, y, z): (" + ReadInfoEEPROM(EP_Motor_DIR_X, 8) + "," + ReadInfoEEPROM(EP_Motor_DIR_Y, 8) + "," + ReadInfoEEPROM(EP_Motor_DIR_Z, 8) + ")");
         return 0;
       }
       else
       {
-        int dbt = cmd.toInt();
-        IsDirtReverse_X = dbt;
-        IsDirtReverse_Y = dbt;
-        IsDirtReverse_Z = dbt;
-        WR_EEPROM(EP_Motor_DIR_X, cmd);
-        WR_EEPROM(EP_Motor_DIR_Y, cmd);
-        WR_EEPROM(EP_Motor_DIR_Z, cmd);
+        if (Contains(cmd, ","))
+        {
+          String sx = cmd.substring(0, cmd.indexOf(','));
+          if (isNumberic(sx))
+          {
+            IsDirtReverse_X = sx.toInt();
+            WR_EEPROM(EP_Motor_DIR_X, sx);
+          }
+
+          cmd.remove(0, cmd.indexOf(',') + 1);
+
+          String sy = cmd.substring(0, cmd.indexOf(','));
+          if (isNumberic(sy))
+          {
+            IsDirtReverse_Y = sy.toInt();
+            WR_EEPROM(EP_Motor_DIR_Y, sy);
+          }
+
+          cmd.remove(0, cmd.indexOf(',') + 1);
+
+          String sz = cmd.substring(0, cmd.indexOf(','));
+          if (isNumberic(sz))
+          {
+            IsDirtReverse_Z = sz.toInt();
+            WR_EEPROM(EP_Motor_DIR_Z, sz);
+          }
+
+          MSGOutput("Set DIR (x, y, z): (" + String(IsDirtReverse_X) + "," + String(IsDirtReverse_Y) + "," + String(IsDirtReverse_Z) + ")");
+        }
+        else
+        {
+          if (isNumberic(cmd))
+          {
+            int dbt = cmd.toInt();
+            IsDirtReverse_X = dbt;
+            IsDirtReverse_Y = dbt;
+            IsDirtReverse_Z = dbt;
+            WR_EEPROM(EP_Motor_DIR_X, cmd);
+            WR_EEPROM(EP_Motor_DIR_Y, cmd);
+            WR_EEPROM(EP_Motor_DIR_Z, cmd);
+            MSGOutput("Set Motor DIR:" + cmd);
+          }
+        }
       }
 
       if (IsDirtReverse_X == 1)
@@ -5546,8 +5582,6 @@ int Function_Classification(String cmd, int ButtonSelected)
         Z_DIR_True = true;
         Z_DIR_False = false;
       }
-
-      Serial.println("Set Motor DIR:" + cmd);
     }
 
     // Set Manual-Encoder Control Motor Step
@@ -5555,46 +5589,77 @@ int Function_Classification(String cmd, int ButtonSelected)
     {
       cmd = ExtractCmd(cmd, "ENC");
 
-      Serial.println("ccnd:" + cmd);
-
-      // cmd.remove(0, 3);
-
       if (Contains(cmd, "X"))
       {
         cmd.remove(0, 2); // Include empty char deleted
         Encoder_Motor_Step_X = cmd.toInt();
         WR_EEPROM(EP_Encoder_Motor_Step_X, cmd);
-
-        // tarPZ = Encoder_Motor_Step_X * tan(11.5 * (PI / 180));
+        MSGOutput("Set Motor X ENC Step:" + cmd);
       }
       else if (Contains(cmd, "Y"))
       {
         cmd.remove(0, 2); // Include empty char deleted
         Encoder_Motor_Step_Y = cmd.toInt();
         WR_EEPROM(EP_Encoder_Motor_Step_Y, cmd);
+        MSGOutput("Set Motor Y ENC Step:" + cmd);
       }
       else if (Contains(cmd, "Z"))
       {
         cmd.remove(0, 2); // Include empty char deleted
         Encoder_Motor_Step_Z = cmd.toInt();
         WR_EEPROM(EP_Encoder_Motor_Step_Z, cmd);
+        MSGOutput("Set Motor Z ENC Step:" + cmd);
       }
       else if (Contains(cmd, "?"))
       {
-        Serial.println("ENC (x, y, z): (" + ReadInfoEEPROM(EP_Encoder_Motor_Step_X, 8) + "," + ReadInfoEEPROM(EP_Encoder_Motor_Step_Y, 8) + "," + ReadInfoEEPROM(EP_Encoder_Motor_Step_Z, 8) + ")");
+        MSGOutput("ENC (x, y, z): (" + ReadInfoEEPROM(EP_Encoder_Motor_Step_X, 8) + "," + ReadInfoEEPROM(EP_Encoder_Motor_Step_Y, 8) + "," + ReadInfoEEPROM(EP_Encoder_Motor_Step_Z, 8) + ")");
       }
-      else
+      else if (Contains(cmd, ","))
       {
-        int dbt = cmd.toInt();
-        Encoder_Motor_Step_X = dbt;
-        Encoder_Motor_Step_Y = dbt;
-        Encoder_Motor_Step_Z = dbt;
-        WR_EEPROM(EP_Encoder_Motor_Step_X, cmd);
-        WR_EEPROM(EP_Encoder_Motor_Step_Y, cmd);
-        WR_EEPROM(EP_Encoder_Motor_Step_Z, cmd);
+        Serial.println("Set ENC (x, y, z): (" + cmd + ")");
+
+        String ss = cmd.substring(0, cmd.indexOf(','));
+        if (isNumberic(ss))
+        {
+          Encoder_Motor_Step_X = ss.toInt();
+          WR_EEPROM(EP_Encoder_Motor_Step_X, String(Encoder_Motor_Step_X));
+        }
+
+        cmd.remove(0, cmd.indexOf(',') + 1);
+
+        ss = cmd.substring(0, cmd.indexOf(','));
+        if (isNumberic(ss))
+        {
+          Encoder_Motor_Step_Y = ss.toInt();
+          WR_EEPROM(EP_Encoder_Motor_Step_Y, String(Encoder_Motor_Step_Y));
+        }
+
+        cmd.remove(0, cmd.indexOf(',') + 1);
+
+        ss = cmd.substring(0, cmd.indexOf(','));
+        if (isNumberic(ss))
+        {
+          Encoder_Motor_Step_Z = ss.toInt();
+          WR_EEPROM(EP_Encoder_Motor_Step_Z, String(Encoder_Motor_Step_Z));
+        }
       }
 
-      Serial.println("Set Motor ENC Step:" + cmd);
+      else
+      {
+        if (isNumberic(cmd))
+        {
+          int dbt = cmd.toInt();
+
+          Encoder_Motor_Step_X = dbt;
+          Encoder_Motor_Step_Y = dbt;
+          Encoder_Motor_Step_Z = dbt;
+          WR_EEPROM(EP_Encoder_Motor_Step_X, cmd);
+          WR_EEPROM(EP_Encoder_Motor_Step_Y, cmd);
+          WR_EEPROM(EP_Encoder_Motor_Step_Z, cmd);
+
+          MSGOutput("Set Motor ENC Step:" + cmd);
+        }
+      }
     }
 
     // Set Heater
@@ -5672,13 +5737,13 @@ int Function_Classification(String cmd, int ButtonSelected)
     }
 
     // Set PD average points
-    else if (Contains(cmd, "Set_PD_average_Points:"))
+    else if (Contains(cmd, "AVG"))
     {
-      cmd = ExtractCmd(cmd, "Set_PD_average_Points:");
+      cmd = ExtractCmd(cmd, "AVG");
 
       Get_PD_Points = cmd.toInt();
 
-      MSGOutput("Set Get_PD_Points: " + WR_EEPROM(EP_Get_PD_Points, cmd));
+      MSGOutput("Set IL_Avg_Points: " + WR_EEPROM(EP_Get_PD_Points, cmd));
     }
 
     // Set Station Type
@@ -5746,19 +5811,6 @@ int Function_Classification(String cmd, int ButtonSelected)
     {
       MSGOutput(ReadInfoEEPROM(88, 32));
     }
-
-    // Set Server Password
-    // else if (Contains(cmd, "PW_Server#"))
-    // {
-    //   cmd.remove(0, 10);
-    //   MSGOutput("Set Server Password: " + WR_EEPROM(120, 32, cmd));
-    // }
-
-    // Get Server Password
-    // else if (cmd == "PW_Server?")
-    // {
-    //   MSGOutput(ReadInfoEEPROM(120, 32));
-    // }
 
     // Get Firmware Version
     else if (cmd == "VER?")

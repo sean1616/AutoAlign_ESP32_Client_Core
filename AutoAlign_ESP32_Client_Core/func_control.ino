@@ -193,19 +193,29 @@ void step(byte stepperPin, long steps, int delayTime)
     }
   }
 
-  bool dirc = false;
+  bool dirc = false, dir_True = true, dir_False = false;
 
   if (stepperPin == X_STP_Pin)
   {
     dirc = digitalRead(X_DIR_Pin);
+    // if(IsDirtReverse_X)
+    // {
+
+    // }
+    // dir_True = X_DIR_True;
+    // dir_False = !dir_True;
   }
   else if (stepperPin == Y_STP_Pin)
   {
     dirc = digitalRead(Y_DIR_Pin);
+    // dir_True = Y_DIR_True;
+    // dir_False = !dir_True;
   }
   else if (stepperPin == Z_STP_Pin)
   {
     dirc = digitalRead(Z_DIR_Pin);
+    // dir_True = Z_DIR_True;
+    // dir_False = !dir_True;
   }
 
   // Position Record
@@ -550,8 +560,9 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT)
   if (Delta_Z != 0)
     digitalWrite(Z_DIR_Pin, DIRZ);
 
-  // delayMicroseconds(300);
-  // delay(3);
+  // 依三軸的先前方向判斷是否需要下delay
+  //  delayMicroseconds(300);
+  //  delay(3);
 
   // 計算分時時間
   byte MoveAxisCount = 0;
