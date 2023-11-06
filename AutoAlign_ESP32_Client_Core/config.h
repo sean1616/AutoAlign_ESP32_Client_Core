@@ -209,6 +209,10 @@ bool isTrip3Jump = true; // If station is high resolution , this value could be 
 bool isWatchDog_Flag = false;
 bool isLCD_Auto_Update = false;
 
+int IsDirtReverse_X = 0;
+int IsDirtReverse_Y = 0;
+int IsDirtReverse_Z = 0;
+
 bool X_DIR_True = true;
 bool X_DIR_False = false;
 bool Y_DIR_True = true;
@@ -252,8 +256,9 @@ double Cal_PD_Input_Row_Dac(int averageCount);
 double Get_IL_DAC(int averageCount);
 void EmergencyStop();
 
-void step(byte stepperPin, long steps, int delayTime);
-void step(byte stepperPin, long steps, int delayTime, byte dirPin, bool dir);
+// void step(byte stepperPin, long steps, int delayTime);
+void step(byte stepperPin, long steps, int delayTime, bool dir);
+// void step(byte stepperPin, long steps, int delayTime, byte dirPin, bool dir);
 void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep, int stableDelay, bool isOutputPosition = false, int pinDelay = 8);
 void Move_Motor_abs(int xyz, long Target);
 void Move_Motor_abs_async(struct_Motor_Pos TargetPos, int DelayT = 40);

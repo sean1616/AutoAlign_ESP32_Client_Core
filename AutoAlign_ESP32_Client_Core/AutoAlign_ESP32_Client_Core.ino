@@ -297,10 +297,6 @@ int aLastState_Z; // 定義 aLastState 為 int 類型變數
 // bool Z_DIR_True = true;
 // bool Z_DIR_False = false;
 
-int IsDirtReverse_X = 0;
-int IsDirtReverse_Y = 0;
-int IsDirtReverse_Z = 0;
-
 int Encoder_Motor_Step_X = 60;
 int Encoder_Motor_Step_Y = 60;
 int Encoder_Motor_Step_Z = 60;
@@ -559,13 +555,13 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
     return true;
 
   //-------------------------------------------Jump to Trip_1 initial position-------------------------------------
-  digitalWrite(DIR_Pin, MotorCC_A);
-  delay(1);
+  // digitalWrite(DIR_Pin, MotorCC_A);
+  // delay(1);
 
   if (true)
   {
-    step(STP_Pin, motorStep * count, delayBetweenStep); // First Jump
-    delay(250);                                         // Default : 100
+    step(STP_Pin, motorStep * count, delayBetweenStep, Direction); // First Jump
+    delay(250);                                                    // Default : 100
     PD_Now = Cal_PD_Input_IL(Get_PD_Points);
 
     DataOutput(PD_Now);
@@ -589,9 +585,8 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
   // }
 
   MotorCC_A = !MotorCC_A; // Reverse direction
-  digitalWrite(DIR_Pin, MotorCC_A);
-
-  delay(stableDelay + 5); // Default: 100
+  // digitalWrite(DIR_Pin, MotorCC_A);
+  // delay(8); // Default: 100
 
   //-------------------------------------------------------Trip_1 -----------------------------------------------
 
@@ -630,7 +625,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
     }
 
     // 馬達移動
-    step(STP_Pin, motorStep, delayBetweenStep);
+    step(STP_Pin, motorStep, delayBetweenStep, MotorCC_A);
     delay(stableDelay);
 
     if (i > 1 && PD_Value[i - 1] > -2)
@@ -905,8 +900,8 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
     }
 
     MotorCC_A = !MotorCC_A; // Reverse direction
-    digitalWrite(DIR_Pin, MotorCC_A);
-    delay(5);
+    // digitalWrite(DIR_Pin, MotorCC_A);
+    // delay(5);
 
     for (int i = 0; i < dataCount; i++)
     {
@@ -923,7 +918,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
         continue;
       }
 
-      step(STP_Pin, motorStep, delayBetweenStep);
+      step(STP_Pin, motorStep, delayBetweenStep, MotorCC_A);
       delay(stableDelay);
 
       if (i > 1 && PD_Value[i - 1] > -2)
@@ -4029,17 +4024,17 @@ void BackLash_Reverse(int XYZ, bool dir, int stableDelay)
   }
 
   MotorCC_A = dir;
-  digitalWrite(DIR_Pin, MotorCC_A);
-  delay(5);
+  // digitalWrite(DIR_Pin, MotorCC_A);
+  // delay(5);
 
-  step(STP_Pin, (backlash + 20), delayBetweenStep); // Backlash about 40 pulse
+  step(STP_Pin, (backlash + 20), delayBetweenStep, MotorCC_A); // Backlash about 40 pulse
   delay(stableDelay * 2);
 
   // Reverse
   MotorCC_A = !MotorCC_A;
-  digitalWrite(DIR_Pin, MotorCC_A);
-  delay(10);
-  step(STP_Pin, (backlash * Modify_Ratio + 20), delayBetweenStep); // Backlash about 40 pulse
+  // digitalWrite(DIR_Pin, MotorCC_A);
+  // delay(10);
+  step(STP_Pin, (backlash * Modify_Ratio + 20), delayBetweenStep, MotorCC_A); // Backlash about 40 pulse
   delay(stableDelay * 2);
 
   switch (XYZ)
@@ -4281,7 +4276,7 @@ struct_AlignResult AutoAlign_Scan_DirectionJudge_V2(int axisDir, int count, int 
 
       if (i != 0)
       {
-        step(STP_Pin, motorStep, delayBetweenStep);
+        step(STP_Pin, motorStep, delayBetweenStep, MotorCC_A);
         delay(stableDelay);
       }
 
@@ -4529,10 +4524,10 @@ bool AutoAlign_Scan_DirectionJudge_V3(int XYZ, int count, int motorStep, int sta
     return true;
 
   //-------------------------------------------Jump to Trip_1 initial position-------------------------------------
-  digitalWrite(DIR_Pin, MotorCC_A);
-  delay(1);
+  // digitalWrite(DIR_Pin, MotorCC_A);
+  // delay(5);
 
-  if (true)
+  // if (true)
   {
     PD_Now = Cal_PD_Input_IL(Get_PD_Points);
     DataOutput();
@@ -4575,7 +4570,7 @@ bool AutoAlign_Scan_DirectionJudge_V3(int XYZ, int count, int motorStep, int sta
       continue;
     }
 
-    step(STP_Pin, motorStep, delayBetweenStep);
+    step(STP_Pin, motorStep, delayBetweenStep, MotorCC_A);
     delay(stableDelay);
 
     if (i > 1 && PD_Value[i - 1] > -2)
@@ -4917,19 +4912,17 @@ int Function_Classification(String cmd, int ButtonSelected)
     {
       cmd.remove(0, 7);
 
-      int travel_x = 0, travel_y = 0, travel_z = 0;
+      long travel_x = 0, travel_y = 0, travel_z = 0;
 
-      travel_x = cmd.substring(0, cmd.indexOf('_')).toInt();
-
-      cmd.remove(0, cmd.indexOf('_') + 1);
-
-      travel_y = cmd.substring(0, cmd.indexOf('_')).toInt();
-      // Serial.println(cmd.substring(0, cmd.indexOf('_'))); // y
+      travel_x = cmd.substring(0, cmd.indexOf('_')).toDouble();
 
       cmd.remove(0, cmd.indexOf('_') + 1);
 
-      travel_z = cmd.substring(0, cmd.indexOf('_')).toInt();
-      // Serial.println(cmd.substring(0, cmd.indexOf('_'))); // z
+      travel_y = cmd.substring(0, cmd.indexOf('_')).toDouble();
+
+      cmd.remove(0, cmd.indexOf('_') + 1);
+
+      travel_z = cmd.substring(0, cmd.indexOf('_')).toDouble();
 
       Move_Motor_abs_all(travel_x, travel_y, travel_z);
 

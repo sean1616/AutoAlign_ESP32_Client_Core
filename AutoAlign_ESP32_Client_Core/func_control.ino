@@ -175,8 +175,178 @@ void EmergencyStop()
   digitalWrite(Tablet_PD_mode_Trigger_Pin, true); // false is PD mode, true is Servo mode
 }
 
-void step(byte stepperPin, long steps, int delayTime)
+// void step(byte stepperPin, long steps, int delayTime)
+// {
+//   steps = abs(steps);
+
+//   for (long i = 0; i < steps; i++)
+//   {
+//     digitalWrite(stepperPin, HIGH);
+//     delayMicroseconds(delayTime);
+//     digitalWrite(stepperPin, LOW);
+//     delayMicroseconds(delayTime);
+
+//     if (isStop)
+//     {
+//       steps -= (i + 1);
+//       break;
+//     }
+//   }
+
+//   bool dirc = false, dir_Judge = true;
+
+//   if (stepperPin == X_STP_Pin)
+//   {
+//     dirc = digitalRead(X_DIR_Pin);
+//     if (IsDirtReverse_X)
+//     {
+//       dir_Judge = false;
+//     }
+//   }
+//   else if (stepperPin == Y_STP_Pin)
+//   {
+//     dirc = digitalRead(Y_DIR_Pin);
+//     if (IsDirtReverse_Y)
+//     {
+//       dir_Judge = false;
+//     }
+//   }
+//   else if (stepperPin == Z_STP_Pin)
+//   {
+//     dirc = digitalRead(Z_DIR_Pin);
+//     if (IsDirtReverse_Z)
+//     {
+//       dir_Judge = false;
+//     }
+//   }
+
+//   // Position Record
+//   if (dirc == dir_Judge)
+//   {
+//     switch (stepperPin)
+//     {
+//     case X_STP_Pin:
+//       Pos_Now.X += steps;
+//       MotorCC_X = true;
+//       X_Pos_Now = Pos_Now.X;
+//       break;
+//     case Y_STP_Pin:
+//       Pos_Now.Y += steps;
+//       MotorCC_Y = true;
+//       Y_Pos_Now = Pos_Now.Y;
+//       break;
+//     case Z_STP_Pin:
+//       Pos_Now.Z += steps;
+//       MotorCC_Z = true;
+//       Z_Pos_Now = Pos_Now.Z;
+//       break;
+//     }
+//   }
+//   else
+//   {
+//     switch (stepperPin)
+//     {
+//     case X_STP_Pin:
+//       Pos_Now.X -= steps;
+//       MotorCC_X = false;
+//       X_Pos_Now = Pos_Now.X;
+//       break;
+//     case Y_STP_Pin:
+//       Pos_Now.Y -= steps;
+//       MotorCC_Y = false;
+//       Y_Pos_Now = Pos_Now.Y;
+//       break;
+//     case Z_STP_Pin:
+//       Pos_Now.Z -= steps;
+//       MotorCC_Z = false;
+//       Z_Pos_Now = Pos_Now.Z;
+//       break;
+//     }
+//   }
+// }
+
+void step(byte stepperPin, long steps, int delayTime, bool dirt_input)
 {
+  bool dirN = false, dir_Judge = true;
+
+  if (stepperPin == X_STP_Pin)
+  {
+    dirN = digitalRead(X_DIR_Pin);
+
+    if (IsDirtReverse_X)
+    {
+      // 反向
+      dir_Judge = false;
+
+      if (dirt_input == dirN)
+      {
+        digitalWrite(X_DIR_Pin, !dirt_input);
+        delay(8);
+        dirN = digitalRead(X_DIR_Pin);
+      }
+    }
+    else
+    {
+      // 不反向
+      if (dirt_input != dirN)
+      {
+        digitalWrite(X_DIR_Pin, dirt_input);
+        delay(8);
+        dirN = digitalRead(X_DIR_Pin);
+      }
+    }
+  }
+  else if (stepperPin == Y_STP_Pin)
+  {
+    dirN = digitalRead(Y_DIR_Pin);
+    if (IsDirtReverse_Y)
+    {
+      dir_Judge = false;
+
+      if (dirt_input == dirN)
+      {
+        digitalWrite(Y_DIR_Pin, !dirt_input);
+        delay(8);
+        dirN = digitalRead(Y_DIR_Pin);
+      }
+    }
+    else
+    {
+      // 不反向
+      if (dirt_input != dirN)
+      {
+        digitalWrite(Y_DIR_Pin, dirt_input);
+        delay(8);
+        dirN = digitalRead(Y_DIR_Pin);
+      }
+    }
+  }
+  else if (stepperPin == Z_STP_Pin)
+  {
+    dirN = digitalRead(Z_DIR_Pin);
+    if (IsDirtReverse_Z)
+    {
+      dir_Judge = false;
+
+      if (dirt_input == dirN)
+      {
+        digitalWrite(Z_DIR_Pin, !dirt_input);
+        delay(8);
+        dirN = digitalRead(Z_DIR_Pin);
+      }
+    }
+    else
+    {
+      // 不反向
+      if (dirt_input != dirN)
+      {
+        digitalWrite(Z_DIR_Pin, dirt_input);
+        delay(8);
+        dirN = digitalRead(Z_DIR_Pin);
+      }
+    }
+  }
+
   steps = abs(steps);
 
   for (long i = 0; i < steps; i++)
@@ -193,33 +363,10 @@ void step(byte stepperPin, long steps, int delayTime)
     }
   }
 
-  bool dirc = false, dir_True = true, dir_False = false;
-
-  if (stepperPin == X_STP_Pin)
-  {
-    dirc = digitalRead(X_DIR_Pin);
-    // if(IsDirtReverse_X)
-    // {
-
-    // }
-    // dir_True = X_DIR_True;
-    // dir_False = !dir_True;
-  }
-  else if (stepperPin == Y_STP_Pin)
-  {
-    dirc = digitalRead(Y_DIR_Pin);
-    // dir_True = Y_DIR_True;
-    // dir_False = !dir_True;
-  }
-  else if (stepperPin == Z_STP_Pin)
-  {
-    dirc = digitalRead(Z_DIR_Pin);
-    // dir_True = Z_DIR_True;
-    // dir_False = !dir_True;
-  }
+  // MSGOutput("dirN:" + String(dirN) + ", dirJ:" + String(dir_Judge) + ", dirIn:" + String(dirt_input));
 
   // Position Record
-  if (dirc)
+  if (dirN == dir_Judge)
   {
     switch (stepperPin)
     {
@@ -263,78 +410,90 @@ void step(byte stepperPin, long steps, int delayTime)
   }
 }
 
-void step(byte stepperPin, long steps, int delayTime, byte dirPin, bool dir)
-{
-  // steps = abs(steps);
-  digitalWrite(dirPin, dir);
+// void step(byte stepperPin, long steps, int delayTime, byte dirPin, bool dir)
+// {
+//   // steps = abs(steps);
+//   digitalWrite(dirPin, dir);
 
-  for (long i = 0; i < steps; i++)
-  {
-    digitalWrite(stepperPin, HIGH);
-    delayMicroseconds(delayTime);
-    digitalWrite(stepperPin, LOW);
-    delayMicroseconds(delayTime);
+//   for (long i = 0; i < steps; i++)
+//   {
+//     digitalWrite(stepperPin, HIGH);
+//     delayMicroseconds(delayTime);
+//     digitalWrite(stepperPin, LOW);
+//     delayMicroseconds(delayTime);
 
-    if (isStop)
-    {
-      steps -= (i + 1);
-      break;
-    }
-  }
+//     if (isStop)
+//     {
+//       steps -= (i + 1);
+//       break;
+//     }
+//   }
 
-  bool dirc = false;
+//   bool dirc = false, dir_Judge = true;
 
-  if (stepperPin == X_STP_Pin)
-  {
-    dirc = digitalRead(X_DIR_Pin);
-  }
-  else if (stepperPin == Y_STP_Pin)
-  {
-    dirc = digitalRead(Y_DIR_Pin);
-  }
-  else if (stepperPin == Z_STP_Pin)
-  {
-    dirc = digitalRead(Z_DIR_Pin);
-  }
+//   if (stepperPin == X_STP_Pin)
+//   {
+//     dirc = digitalRead(X_DIR_Pin);
+//     if (IsDirtReverse_X)
+//     {
+//       dir_Judge = false;
+//     }
+//   }
+//   else if (stepperPin == Y_STP_Pin)
+//   {
+//     dirc = digitalRead(Y_DIR_Pin);
+//     if (IsDirtReverse_Y)
+//     {
+//       dir_Judge = false;
+//     }
+//   }
+//   else if (stepperPin == Z_STP_Pin)
+//   {
+//     dirc = digitalRead(Z_DIR_Pin);
+//     if (IsDirtReverse_Z)
+//     {
+//       dir_Judge = false;
+//     }
+//   }
 
-  // Position Record
-  if (dirc)
-  {
-    switch (stepperPin)
-    {
-    case X_STP_Pin:
-      Pos_Now.X += steps;
-      MotorCC_X = true;
-      break;
-    case Y_STP_Pin:
-      Pos_Now.Y += steps;
-      MotorCC_Y = true;
-      break;
-    case Z_STP_Pin:
-      Pos_Now.Z += steps;
-      MotorCC_Z = true;
-      break;
-    }
-  }
-  else
-  {
-    switch (stepperPin)
-    {
-    case X_STP_Pin:
-      Pos_Now.X -= steps;
-      MotorCC_X = false;
-      break;
-    case Y_STP_Pin:
-      Pos_Now.Y -= steps;
-      MotorCC_Y = false;
-      break;
-    case Z_STP_Pin:
-      Pos_Now.Z -= steps;
-      MotorCC_Z = false;
-      break;
-    }
-  }
-}
+//   // Position Record
+//   if (dirc == dir_Judge)
+//   {
+//     switch (stepperPin)
+//     {
+//     case X_STP_Pin:
+//       Pos_Now.X += steps;
+//       MotorCC_X = true;
+//       break;
+//     case Y_STP_Pin:
+//       Pos_Now.Y += steps;
+//       MotorCC_Y = true;
+//       break;
+//     case Z_STP_Pin:
+//       Pos_Now.Z += steps;
+//       MotorCC_Z = true;
+//       break;
+//     }
+//   }
+//   else
+//   {
+//     switch (stepperPin)
+//     {
+//     case X_STP_Pin:
+//       Pos_Now.X -= steps;
+//       MotorCC_X = false;
+//       break;
+//     case Y_STP_Pin:
+//       Pos_Now.Y -= steps;
+//       MotorCC_Y = false;
+//       break;
+//     case Z_STP_Pin:
+//       Pos_Now.Z -= steps;
+//       MotorCC_Z = false;
+//       break;
+//     }
+//   }
+// }
 
 void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep, int stableDelay, bool isOutputPosition, int pinDelay)
 {
@@ -347,10 +506,10 @@ void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delay
     //       dirt = Z_DIR_False;
     // }
 
-    digitalWrite(dir_pin, dirt);
-    delay(pinDelay);
+    // digitalWrite(dir_pin, dirt);
+    // delay(pinDelay);
 
-    step(stp_pin, moveSteps, delayStep);
+    step(stp_pin, moveSteps, delayStep, dirt);
     delay(stableDelay);
 
     if (isOutputPosition)
@@ -387,6 +546,8 @@ void Move_Motor_abs(int xyz, long Target)
     delayBetweenStep = delayBetweenStep_Z;
     break;
   }
+
+  // MSGOutput("Tar:" + String(Target) + ", Pos_N:" + String(Pos_N));
 
   MinMotroStep = Target - Pos_N;
 
@@ -704,30 +865,29 @@ void Move_Motor_Cont(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int 
 {
   MotorSTP_Pin = dir_pin;
 
-  bool dirNow = false;
+  // bool dirNow = false;
 
-  if (stp_pin == X_STP_Pin)
-  {
-    dirNow = digitalRead(X_DIR_Pin);
-  }
-  else if (stp_pin == Y_STP_Pin)
-  {
-    dirNow = digitalRead(Y_DIR_Pin);
-  }
-  else if (stp_pin == Z_STP_Pin)
-  {
-    dirNow = digitalRead(Z_DIR_Pin);
-  }
+  // if (stp_pin == X_STP_Pin)
+  // {
+  //   dirNow = digitalRead(X_DIR_Pin);
+  // }
+  // else if (stp_pin == Y_STP_Pin)
+  // {
+  //   dirNow = digitalRead(Y_DIR_Pin);
+  // }
+  // else if (stp_pin == Z_STP_Pin)
+  // {
+  //   dirNow = digitalRead(Z_DIR_Pin);
+  // }
 
-  if (dirNow != dirt)
-  {
-    // MotorCC_A = dirt;
-    MotorDir_Pin = dir_pin;
-    digitalWrite(dir_pin, dirt); // 步進馬達方向控制, false為負方向
-    delay(8);
-  }
+  // if (dirNow != dirt)
+  // {
+  //   MotorDir_Pin = dir_pin;
+  //   digitalWrite(dir_pin, dirt); // 步進馬達方向控制, false為負方向
+  //   delay(8);
+  // }
 
-  step(stp_pin, moveSteps, delayStep);
+  step(stp_pin, moveSteps, delayStep, dirt);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
