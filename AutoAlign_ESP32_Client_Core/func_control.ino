@@ -697,19 +697,49 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT)
 
   // 判斷方向
   if (Delta_X > 0)
-    DIRX = true;
+  {
+    if (!IsDirtReverse_X)
+      DIRX = true;
+    else
+      DIRX = false;
+  }
   else if (Delta_X < 0)
-    DIRX = false;
+  {
+    if (!IsDirtReverse_X)
+      DIRX = false;
+    else
+      DIRX = true;
+  }
 
   if (Delta_Y > 0)
-    DIRY = true;
+  {
+    if (!IsDirtReverse_Y)
+      DIRY = true;
+    else
+      DIRY = false;
+  }
   else if (Delta_Y < 0)
-    DIRY = false;
+  {
+    if (!IsDirtReverse_Y)
+      DIRY = false;
+    else
+      DIRY = true;
+  }
 
   if (Delta_Z > 0)
-    DIRZ = true;
+  {
+    if (!IsDirtReverse_Z)
+      DIRZ = true;
+    else
+      DIRZ = false;
+  }
   else if (Delta_Z < 0)
-    DIRZ = false;
+  {
+    if (!IsDirtReverse_Z)
+      DIRZ = false;
+    else
+      DIRZ = true;
+  }
 
   // 設定軸方向
   if (Delta_X != 0)
