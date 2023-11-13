@@ -213,6 +213,10 @@ int IsDirtReverse_X = 0;
 int IsDirtReverse_Y = 0;
 int IsDirtReverse_Z = 0;
 
+int IsEncDirtReverse_X = 0;
+int IsEncDirtReverse_Y = 0;
+int IsEncDirtReverse_Z = 0;
+
 bool X_DIR_True = true;
 bool X_DIR_False = false;
 bool Y_DIR_True = true;

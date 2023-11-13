@@ -25,6 +25,7 @@ const uint16_t EP_Motor_DIR_Z = 104;
 const uint16_t EP_Encoder_Motor_Step_X = 112;
 const uint16_t EP_Encoder_Motor_Step_Y = 120;
 const uint16_t EP_Encoder_Motor_Step_Z = 128;
+const uint16_t EP_Encoder_DIR_XYZ = 136;
 
 const uint16_t EP_Get_PD_Points = 152;
 const uint16_t EP_AQ_Scan_Compensation_Steps_Z_A = 160;

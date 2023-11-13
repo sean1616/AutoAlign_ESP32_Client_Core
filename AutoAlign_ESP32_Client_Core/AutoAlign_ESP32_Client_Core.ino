@@ -312,7 +312,10 @@ void Task_1_Encoder(void *pvParameters)
     {
       // Encoder X
       {
-        aState_X = digitalRead(Enc_X_outputA); // 將outputA的讀取值 設給 aState
+        if (!IsEncDirtReverse_X)
+          aState_X = digitalRead(Enc_X_outputA); // 將outputA的讀取值 設給 aState
+        else
+          aState_X = digitalRead(Enc_X_outputB); // 將outputA的讀取值 設給 aState
 
         // 條件判斷，當aState 不等於 aLastState時發生
         if (aState_X != aLastState_X)
@@ -320,10 +323,20 @@ void Task_1_Encoder(void *pvParameters)
           MotorCC_A = MotorCC_X;
 
           // 條件判斷，當outputB讀取值 不等於 aState時發生
-          if (digitalRead(Enc_X_outputB) != aState_X)
-            Move_Motor(X_DIR_Pin, X_STP_Pin, X_DIR_True, Encoder_Motor_Step_X, delayBetweenStep_X, 0, false, 0);
+          if (!IsEncDirtReverse_X)
+          {
+            if (digitalRead(Enc_X_outputB) != aState_X)
+              Move_Motor(X_DIR_Pin, X_STP_Pin, X_DIR_True, Encoder_Motor_Step_X, delayBetweenStep_X, 0, false, 0);
+            else
+              Move_Motor(X_DIR_Pin, X_STP_Pin, X_DIR_False, Encoder_Motor_Step_X, delayBetweenStep_X, 0, false, 0);
+          }
           else
-            Move_Motor(X_DIR_Pin, X_STP_Pin, X_DIR_False, Encoder_Motor_Step_X, delayBetweenStep_X, 0, false, 0);
+          {
+            if (digitalRead(Enc_X_outputA) != aState_X)
+              Move_Motor(X_DIR_Pin, X_STP_Pin, X_DIR_True, Encoder_Motor_Step_X, delayBetweenStep_X, 0, false, 0);
+            else
+              Move_Motor(X_DIR_Pin, X_STP_Pin, X_DIR_False, Encoder_Motor_Step_X, delayBetweenStep_X, 0, false, 0);
+          }
         }
 
         aLastState_X = aState_X; // 將aState 最後的值 設給 aLastState
@@ -331,7 +344,10 @@ void Task_1_Encoder(void *pvParameters)
 
       // Encoder Y
       {
-        aState_Y = digitalRead(Enc_Y_outputA); // 將outputA的讀取值 設給 aState
+        if (!IsEncDirtReverse_Y)
+          aState_Y = digitalRead(Enc_Y_outputA); // 將outputA的讀取值 設給 aState
+        else
+          aState_Y = digitalRead(Enc_Y_outputB); // 將outputA的讀取值 設給 aState
 
         MotorCC_A = MotorCC_Y;
 
@@ -339,13 +355,19 @@ void Task_1_Encoder(void *pvParameters)
         if (aState_Y != aLastState_Y)
         {
           // 條件判斷，當outputB讀取值 不等於 aState時發生
-          if (digitalRead(Enc_Y_outputB) != aState_Y)
+          if (!IsEncDirtReverse_Y)
           {
-            Move_Motor(Y_DIR_Pin, Y_STP_Pin, Y_DIR_True, Encoder_Motor_Step_Y, delayBetweenStep_Y, 0, false, 0);
+            if (digitalRead(Enc_Y_outputB) != aState_Y)
+              Move_Motor(Y_DIR_Pin, Y_STP_Pin, Y_DIR_True, Encoder_Motor_Step_Y, delayBetweenStep_Y, 0, false, 0);
+            else
+              Move_Motor(Y_DIR_Pin, Y_STP_Pin, Y_DIR_False, Encoder_Motor_Step_Y, delayBetweenStep_Y, 0, false, 0);
           }
           else
           {
-            Move_Motor(Y_DIR_Pin, Y_STP_Pin, Y_DIR_False, Encoder_Motor_Step_Y, delayBetweenStep_Y, 0, false, 0);
+            if (digitalRead(Enc_Y_outputA) != aState_Y)
+              Move_Motor(Y_DIR_Pin, Y_STP_Pin, Y_DIR_True, Encoder_Motor_Step_Y, delayBetweenStep_Y, 0, false, 0);
+            else
+              Move_Motor(Y_DIR_Pin, Y_STP_Pin, Y_DIR_False, Encoder_Motor_Step_Y, delayBetweenStep_Y, 0, false, 0);
           }
         }
 
@@ -354,7 +376,10 @@ void Task_1_Encoder(void *pvParameters)
 
       // Encoder Z
       {
-        aState_Z = digitalRead(Enc_Z_outputA); // 將outputA的讀取值 設給 aState
+        if (!IsEncDirtReverse_Z)
+          aState_Z = digitalRead(Enc_Z_outputA); // 將outputA的讀取值 設給 aState
+        else
+          aState_Z = digitalRead(Enc_Z_outputB); // 將outputA的讀取值 設給 aState
 
         MotorCC_A = MotorCC_Z;
 
@@ -362,13 +387,19 @@ void Task_1_Encoder(void *pvParameters)
         if (aState_Z != aLastState_Z)
         {
           // 條件判斷，當outputB讀取值 不等於 aState時發生
-          if (digitalRead(Enc_Z_outputB) != aState_Z)
+          if (!IsEncDirtReverse_Z)
           {
-            Move_Motor(Z_DIR_Pin, Z_STP_Pin, Z_DIR_True, Encoder_Motor_Step_Z, delayBetweenStep_Z, 0, false, 0);
+            if (digitalRead(Enc_Z_outputB) != aState_Z)
+              Move_Motor(Z_DIR_Pin, Z_STP_Pin, Z_DIR_True, Encoder_Motor_Step_Z, delayBetweenStep_Z, 0, false, 0);
+            else
+              Move_Motor(Z_DIR_Pin, Z_STP_Pin, Z_DIR_False, Encoder_Motor_Step_Z, delayBetweenStep_Z, 0, false, 0);
           }
           else
           {
-            Move_Motor(Z_DIR_Pin, Z_STP_Pin, Z_DIR_False, Encoder_Motor_Step_Z, delayBetweenStep_Z, 0, false, 0);
+            if (digitalRead(Enc_Z_outputA) != aState_Z)
+              Move_Motor(Z_DIR_Pin, Z_STP_Pin, Z_DIR_True, Encoder_Motor_Step_Z, delayBetweenStep_Z, 0, false, 0);
+            else
+              Move_Motor(Z_DIR_Pin, Z_STP_Pin, Z_DIR_False, Encoder_Motor_Step_Z, delayBetweenStep_Z, 0, false, 0);
           }
         }
 
@@ -2547,6 +2578,36 @@ void setup()
     Encoder_Motor_Step_Z = isNumberic(eepromString) ? eepromString.toInt() : Encoder_Motor_Step_Z;
     MSGOutput("Encoder_Motor_Step_Z: " + String(Encoder_Motor_Step_Z));
 
+    // Set Encoder DIR
+    eepromString = ReadInfoEEPROM(EP_Encoder_DIR_XYZ, 8);
+    if (Contains(eepromString, ","))
+    {
+      String sx = eepromString.substring(0, eepromString.indexOf(','));
+      if (isNumberic(sx))
+      {
+        IsEncDirtReverse_X = sx.toInt();
+      }
+
+      eepromString.remove(0, eepromString.indexOf(',') + 1);
+
+      String sy = eepromString.substring(0, eepromString.indexOf(','));
+      if (isNumberic(sy))
+      {
+        IsEncDirtReverse_Y = sy.toInt();
+      }
+
+      eepromString.remove(0, eepromString.indexOf(',') + 1);
+
+      String sz = eepromString.substring(0, eepromString.indexOf(','));
+      if (isNumberic(sz))
+      {
+        IsEncDirtReverse_Z = sz.toInt();
+      }
+
+      MSGOutput("Set Encoder DIR:" + WR_EEPROM(EP_Encoder_DIR_XYZ,
+                                               String(IsEncDirtReverse_X) + "," + String(IsEncDirtReverse_Y) + "," + String(IsEncDirtReverse_Z)));
+    }
+
     eepromString = ReadInfoEEPROM(EP_Get_PD_Points, 8);
     Get_PD_Points = isNumberic(eepromString) ? eepromString.toInt() : Get_PD_Points;
     Get_PD_Points = Get_PD_Points == 0 ? 1 : Get_PD_Points;
@@ -2825,6 +2886,7 @@ void loop()
     }
 
     cmd_No = Function_Classification(cmd, ButtonSelected);
+    cmd_No = Function_Msg_Classification(cmd, ButtonSelected);
 
     cmd_No = Function_Excecutation(cmd, cmd_No);
 
@@ -4931,31 +4993,6 @@ int Function_Classification(String cmd, int ButtonSelected)
 
 #pragma endregion
 
-#pragma region - String Command
-    //(CScan) Scan Twoway Command
-    else if (Contains(cmd, "CScan_"))
-    {
-      cmd = ExtractCmd(cmd, "CScan_");
-
-      Txt_LineScanSetting = cmd;
-      Serial.println(Txt_LineScanSetting);
-
-      return 198;
-
-      // Serial.println(cmd);
-    }
-
-    //(SScan) Spiral Scan Command
-    else if (Contains(cmd, "SScan_"))
-    {
-      cmd = ExtractCmd(cmd, "SScan_");
-
-      Txt_SpiralSetting = cmd;
-      Serial.println(Txt_SpiralSetting);
-
-      return 199;
-    }
-
     // Set auto-align / auto-curing Parameter
     else if (Contains(cmd, "Set::"))
     {
@@ -5207,6 +5244,76 @@ int Function_Classification(String cmd, int ButtonSelected)
       }
     }
 
+    // Command No.
+    else if (Contains(cmd, "cmd"))
+    {
+      cmd = ExtractCmd(cmd, "cmd");
+
+      // cmd.remove(0, 3);
+      cmd_No = cmd.toInt();
+      delay(10);
+    }
+  }
+  else if (ButtonSelected >= 0)
+  {
+    // Keyboard No. to Cmd Set No.
+    switch (ButtonSelected)
+    {
+    case 7:
+      cmd_No = 1;
+      break;
+
+    case 8:
+      cmd_No = 2;
+      break;
+
+    case 9:
+      cmd_No = 3;
+      break;
+
+    default:
+      cmd_No = ButtonSelected;
+      break;
+    }
+  }
+
+  return cmd_No;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+int Function_Msg_Classification(String cmd, int ButtonSelected)
+{
+  if (cmd != "" && ButtonSelected < 0)
+  {
+    cmd.trim();
+
+    String cmdUpper = cmd;
+    cmdUpper.toUpperCase();
+
+#pragma region - String Command
+    //(CScan) Scan Twoway Command
+    if (Contains(cmd, "CScan_"))
+    {
+      cmd = ExtractCmd(cmd, "CScan_");
+
+      Txt_LineScanSetting = cmd;
+      Serial.println(Txt_LineScanSetting);
+
+      return 198;
+    }
+
+    //(SScan) Spiral Scan Command
+    else if (Contains(cmd, "SScan_"))
+    {
+      cmd = ExtractCmd(cmd, "SScan_");
+
+      Txt_SpiralSetting = cmd;
+      Serial.println(Txt_SpiralSetting);
+
+      return 199;
+    }
+
     // Set BackLash Command
     else if (Contains(cmd, "_BL:"))
     {
@@ -5237,46 +5344,6 @@ int Function_Classification(String cmd, int ButtonSelected)
         MSGOutput("Set Z BackLash: " + WR_EEPROM(EP_Z_backlash, cmd));
       }
     }
-    //
-    // Set Scan Steps Command
-    // else if (Contains(cmd, "_ScanSTP:"))
-    // {
-    //   if (Contains(cmd, "X"))
-    //   {
-    //     cmd.remove(0, 9);
-    //     cmd.trim();
-
-    //     X_ScanSTP = cmd.toInt();
-
-    //     CleanEEPROM(48, 8);                                         // Clean EEPROM(int startPosition, int datalength)
-    //     WriteInfoEEPROM(String(cmd), 48);                           //(data, start_position)  // Write Data to EEPROM
-    //     Serial.println("Save in eeprom: " + ReadInfoEEPROM(48, 8)); //(start_position, data_length)
-
-    //     Serial.println("Set X Scan Step: " + String(X_ScanSTP));
-    //   }
-    //   else if (Contains(cmd, "Y"))
-    //   {
-    //     cmd.remove(0, 10);
-    //     Y_ScanSTP = cmd.toInt();
-
-    //     CleanEEPROM(56, 8);                                         // Clean EEPROM(int startPosition, int datalength)
-    //     WriteInfoEEPROM(String(cmd), 56);                           //(data, start_position)  // Write Data to EEPROM
-    //     Serial.println("Save in eeprom: " + ReadInfoEEPROM(56, 8)); //(start_position, data_length)
-
-    //     Serial.println("Set Y Scan Step: " + String(String(cmd)));
-    //   }
-    //   else if (Contains(cmd, "Z"))
-    //   {
-    //     cmd.remove(0, 10);
-    //     Z_ScanSTP = cmd.toInt();
-
-    //     CleanEEPROM(64, 8);                                         // Clean EEPROM(int startPosition, int datalength)
-    //     WriteInfoEEPROM(String(cmd), 64);                           //(data, start_position)  // Write Data to EEPROM
-    //     Serial.println("Save in eeprom: " + ReadInfoEEPROM(64, 8)); //(start_position, data_length)
-
-    //     Serial.println("Set Z Scan Step: " + String(String(cmd)));
-    //   }
-    // }
 
     // Get IL Command
     else if (cmd == "IL?")
@@ -5325,8 +5392,6 @@ int Function_Classification(String cmd, int ButtonSelected)
     {
       cmd = ExtractCmd(cmd, "Set_Ref:");
 
-      // Serial.printf("Update Ref Value : %s\n", cmd);
-
       CleanEEPROM(EP_PD_Ref, 8);               // Clean EEPROM(int startPosition, int datalength)
       WriteInfoEEPROM(String(cmd), EP_PD_Ref); //(data, start_position)  // Write Data to EEPROM
       EEPROM.commit();
@@ -5362,12 +5427,6 @@ int Function_Classification(String cmd, int ButtonSelected)
       MotorStepDelayRatio = WR_EEPROM(216, cmd).toDouble();
       MSGOutput("Set_MotorStepDelayRatio:" + String(MotorStepDelayRatio));
     }
-
-    // Get IsStop Command
-    // else if (cmd == "IsStop?")
-    // {
-    //   MSGOutput("IsStop:" + String(isStop));
-    // }
 
     // Get Motor position now
     else if (Contains(cmd, "POS?"))
@@ -5434,36 +5493,6 @@ int Function_Classification(String cmd, int ButtonSelected)
         MSGOutput("Set Motor Speed:" + cmd);
       }
     }
-
-    // Set Manual Control Motor Speed
-    // else if (Contains(cmd, "Set_Motor_Speed_"))
-    // {
-    //   cmd = ExtractCmd(cmd, "Set_Motor_Speed_");
-
-    //   if (Contains(cmd, "X"))
-    //   {
-    //     cmd.remove(0, 2);
-    //     cmd.trim();
-    //     delayBetweenStep_X = cmd.toInt();
-    //     WR_EEPROM(EP_delayBetweenStep_X, cmd);
-    //   }
-    //   else if (Contains(cmd, "Y"))
-    //   {
-    //     cmd.remove(0, 2);
-    //     cmd.trim();
-    //     delayBetweenStep_Y = cmd.toInt();
-    //     WR_EEPROM(EP_delayBetweenStep_Y, cmd);
-    //   }
-    //   else if (Contains(cmd, "Z"))
-    //   {
-    //     cmd.remove(0, 2);
-    //     cmd.trim();
-    //     delayBetweenStep_Z = cmd.toInt();
-    //     WR_EEPROM(EP_delayBetweenStep_Z, cmd);
-    //   }
-
-    //   MSGOutput("Set Motor Speed:" + cmd);
-    // }
 
     // Set Manual-Encoder Control Motor Speed
     else if (Contains(cmd, "DIR"))
@@ -5574,6 +5603,83 @@ int Function_Classification(String cmd, int ButtonSelected)
       {
         Z_DIR_True = true;
         Z_DIR_False = false;
+      }
+    }
+
+    // Set Manual-Encoder Control Motor Speed
+    else if (Contains(cmd, "EDR"))
+    {
+      cmd = ExtractCmd(cmd, "EDR");
+
+      if (Contains(cmd, "X"))
+      {
+        cmd.remove(0, 2); // Include empty char deleted
+        IsEncDirtReverse_X = cmd.toInt();
+        // WR_EEPROM(EP_Encoder_DIR_XYZ,
+        // String(IsEncDirtReverse_X) + "," + String(IsEncDirtReverse_Y) + "," + String(IsEncDirtReverse_Z));
+        MSGOutput("Set Encoder DIR:" + WR_EEPROM(EP_Encoder_DIR_XYZ,
+                                                 String(IsEncDirtReverse_X) + "," + String(IsEncDirtReverse_Y) + "," + String(IsEncDirtReverse_Z)));
+      }
+      else if (Contains(cmd, "Y"))
+      {
+        cmd.remove(0, 2); // Include empty char deleted
+        IsEncDirtReverse_Y = cmd.toInt();
+        MSGOutput("Set Encoder DIR:" + WR_EEPROM(EP_Encoder_DIR_XYZ,
+                                                 String(IsEncDirtReverse_X) + "," + String(IsEncDirtReverse_Y) + "," + String(IsEncDirtReverse_Z)));
+      }
+      else if (Contains(cmd, "Z"))
+      {
+        cmd.remove(0, 2); // Include empty char deleted
+        IsEncDirtReverse_Z = cmd.toInt();
+        MSGOutput("Set Encoder DIR:" + WR_EEPROM(EP_Encoder_DIR_XYZ,
+                                                 String(IsEncDirtReverse_X) + "," + String(IsEncDirtReverse_Y) + "," + String(IsEncDirtReverse_Z)));
+      }
+      else if (Contains(cmd, "?"))
+      {
+        MSGOutput("ENC DIR Revrs (x, y, z): (" + ReadInfoEEPROM(EP_Encoder_DIR_XYZ, 8) + ")");
+        return 0;
+      }
+      else
+      {
+        if (Contains(cmd, ","))
+        {
+          String sx = cmd.substring(0, cmd.indexOf(','));
+          if (isNumberic(sx))
+          {
+            IsEncDirtReverse_X = sx.toInt();
+          }
+
+          cmd.remove(0, cmd.indexOf(',') + 1);
+
+          String sy = cmd.substring(0, cmd.indexOf(','));
+          if (isNumberic(sy))
+          {
+            IsEncDirtReverse_Y = sy.toInt();
+          }
+
+          cmd.remove(0, cmd.indexOf(',') + 1);
+
+          String sz = cmd.substring(0, cmd.indexOf(','));
+          if (isNumberic(sz))
+          {
+            IsEncDirtReverse_Z = sz.toInt();
+          }
+
+          MSGOutput("Set Encoder DIR:" + WR_EEPROM(EP_Encoder_DIR_XYZ,
+                                                   String(IsEncDirtReverse_X) + "," + String(IsEncDirtReverse_Y) + "," + String(IsEncDirtReverse_Z)));
+        }
+        else
+        {
+          if (isNumberic(cmd))
+          {
+            int dbt = cmd.toInt();
+            IsEncDirtReverse_X = dbt;
+            IsEncDirtReverse_Y = dbt;
+            IsEncDirtReverse_Z = dbt;
+            MSGOutput("Set Encoder DIR:" + WR_EEPROM(EP_Encoder_DIR_XYZ,
+                                                     String(IsEncDirtReverse_X) + "," + String(IsEncDirtReverse_Y) + "," + String(IsEncDirtReverse_Z)));
+          }
+        }
       }
     }
 
