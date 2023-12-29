@@ -33,10 +33,10 @@ double ILConverter(double pdDac)
 /// @return
 double Cal_PD_Input_Dac(int averageCount)
 {
-  digitalWrite(X_DIR_Pin, false);
-  digitalWrite(Y_DIR_Pin, false);
-  digitalWrite(Z_DIR_Pin, false);
-  delay(1);
+  // digitalWrite(X_DIR_Pin, false);
+  // digitalWrite(Y_DIR_Pin, false);
+  // digitalWrite(Z_DIR_Pin, false);
+  // delay(1);
 
   double averagePDInput = 0;
   double PDAvgInput = 0;
@@ -48,10 +48,10 @@ double Cal_PD_Input_Dac(int averageCount)
   // Function: (PD Value) - (reference) + 300
   averagePDInput = (PDAvgInput / averageCount);
 
-  digitalWrite(X_DIR_Pin, MotorCC_X);
-  digitalWrite(Y_DIR_Pin, MotorCC_Y);
-  digitalWrite(Z_DIR_Pin, MotorCC_Z);
-  delay(1);
+  // digitalWrite(X_DIR_Pin, MotorCC_X);
+  // digitalWrite(Y_DIR_Pin, MotorCC_Y);
+  // digitalWrite(Z_DIR_Pin, MotorCC_Z);
+  // delay(1);
 
   return (averagePDInput - ref_Dac);
 }
@@ -61,10 +61,10 @@ double Cal_PD_Input_Dac(int averageCount)
 /// @return
 double Cal_PD_Input_IL(int averageCount)
 {
-  digitalWrite(X_DIR_Pin, false);
-  digitalWrite(Y_DIR_Pin, false);
-  digitalWrite(Z_DIR_Pin, false);
-  delay(1);
+  // digitalWrite(X_DIR_Pin, false);
+  // digitalWrite(Y_DIR_Pin, false);
+  // digitalWrite(Z_DIR_Pin, false);
+  // delay(1);
 
   double averagePDInput = 0;
   double PDAvgInput = 0;
@@ -76,10 +76,10 @@ double Cal_PD_Input_IL(int averageCount)
 
   averagePDInput = (PDAvgInput / averageCount);
 
-  digitalWrite(X_DIR_Pin, MotorCC_X);
-  digitalWrite(Y_DIR_Pin, MotorCC_Y);
-  digitalWrite(Z_DIR_Pin, MotorCC_Z);
-  delay(1);
+  // digitalWrite(X_DIR_Pin, MotorCC_X);
+  // digitalWrite(Y_DIR_Pin, MotorCC_Y);
+  // digitalWrite(Z_DIR_Pin, MotorCC_Z);
+  // delay(1);
 
   double IL = ILConverter(averagePDInput) - ref_IL;
 
@@ -91,10 +91,10 @@ double Cal_PD_Input_IL(int averageCount)
 /// @return
 double Cal_PD_Input_Row_IL(int averageCount)
 {
-  digitalWrite(X_DIR_Pin, false);
-  digitalWrite(Y_DIR_Pin, false);
-  digitalWrite(Z_DIR_Pin, false);
-  delay(1);
+  // digitalWrite(X_DIR_Pin, false);
+  // digitalWrite(Y_DIR_Pin, false);
+  // digitalWrite(Z_DIR_Pin, false);
+  // delay(1);
 
   double averagePDInput = 0;
   double PDAvgInput = 0;
@@ -105,10 +105,10 @@ double Cal_PD_Input_Row_IL(int averageCount)
   // Function: (PD Value)
   averagePDInput = (PDAvgInput / averageCount);
 
-  digitalWrite(X_DIR_Pin, MotorCC_X);
-  digitalWrite(Y_DIR_Pin, MotorCC_Y);
-  digitalWrite(Z_DIR_Pin, MotorCC_Z);
-  delay(1);
+  // digitalWrite(X_DIR_Pin, MotorCC_X);
+  // digitalWrite(Y_DIR_Pin, MotorCC_Y);
+  // digitalWrite(Z_DIR_Pin, MotorCC_Z);
+  // delay(1);
 
   double IL = ILConverter(averagePDInput);
 
@@ -120,10 +120,10 @@ double Cal_PD_Input_Row_IL(int averageCount)
 /// @return
 double Cal_PD_Input_Row_Dac(int averageCount)
 {
-  digitalWrite(X_DIR_Pin, false);
-  digitalWrite(Y_DIR_Pin, false);
-  digitalWrite(Z_DIR_Pin, false);
-  delay(1);
+  // digitalWrite(X_DIR_Pin, false);
+  // digitalWrite(Y_DIR_Pin, false);
+  // digitalWrite(Z_DIR_Pin, false);
+  // delay(1);
 
   double averagePDInput = 0;
   double PDAvgInput = 0;
@@ -133,10 +133,10 @@ double Cal_PD_Input_Row_Dac(int averageCount)
   }
   averagePDInput = (PDAvgInput / averageCount);
 
-  digitalWrite(X_DIR_Pin, MotorCC_X);
-  digitalWrite(Y_DIR_Pin, MotorCC_Y);
-  digitalWrite(Z_DIR_Pin, MotorCC_Z);
-  delay(1);
+  // digitalWrite(X_DIR_Pin, MotorCC_X);
+  // digitalWrite(Y_DIR_Pin, MotorCC_Y);
+  // digitalWrite(Z_DIR_Pin, MotorCC_Z);
+  // delay(1);
 
   return averagePDInput;
 }
@@ -562,7 +562,7 @@ void Move_Motor_abs(int xyz, long Target)
 
   MinMotroStep = abs(MinMotroStep);
 
-  Move_Motor(MotorDir_Pin, MotorSTP_Pin, dir, MinMotroStep, delayBetweenStep, 0, false, 8);
+  Move_Motor(MotorDir_Pin, MotorSTP_Pin, dir, MinMotroStep, delayBetweenStep, 0, true, 8);
 }
 
 void Move_Motor_abs_async(struct_Motor_Pos TargetPos, int DelayT)
@@ -875,6 +875,7 @@ void Move_Motor_abs_all(long x, long y, long z, int DelayT)
   Move_Motor_abs_sync(TargetPos, DelayT);
 
   // MSGOutput("Move All Abs End");
+  DataOutput(false);
 }
 
 void Move_Motor_abs_all(int x, int y, int z, bool IsMsg, int DelayT)
@@ -886,6 +887,8 @@ void Move_Motor_abs_all(int x, int y, int z, bool IsMsg, int DelayT)
   TargetPos.Y = y;
   TargetPos.Z = z;
   Move_Motor_abs_sync(TargetPos, DelayT);
+
+  DataOutput(false);
 
   if (IsMsg)
     MSGOutput("Move All Abs End");

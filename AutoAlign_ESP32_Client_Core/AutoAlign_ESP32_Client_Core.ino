@@ -406,8 +406,13 @@ void Task_1_Encoder(void *pvParameters)
         aLastState_Z = aState_Z; // 將aState 最後的值 設給 aLastState
       }
     }
+    else if (isKeepGetIL)
+    {
+      SendIL();
+      continue;
+    }
     else
-      delay(50);
+      delay(50); // default: 50
 
     CheckStop();
   }
@@ -518,7 +523,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
   int DIR_Pin = 0; // 0:X, 1:Y, 2:Z
   int STP_Pin = 0;
   int backlash = 0;
-  MotorCC_A = Direction; // initial direction
+  bool MotorCC_A = Direction; // initial direction
   int trip = 1;
   int dataCount = 3;
   int dataCount_ori;
@@ -576,7 +581,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
   MSGOutput("isWiFiConnected : " + String(isWiFiConnected));
   CMDOutput(">>" + msg + String(trip));
 
-  double PD_initial = Cal_PD_Input_IL(3);
+  double PD_initial = Cal_PD_Input_IL(1);
   MSGOutput("Initial PD: " + String(PD_initial));
 
   maxIL_in_FineScan = PD_initial;
@@ -2445,7 +2450,7 @@ void setup()
     pinMode(Heater_Start_Pin, OUTPUT);
     pinMode(Heater_Stop_Pin, OUTPUT);
   }
-  else if (Station_Type == 3)
+  else if (Station_Type == 3 || Station_Type == 4)
   {
     pinMode(Enc_X_outputA, INPUT_PULLUP);
     pinMode(Enc_X_outputB, INPUT_PULLUP);
@@ -2472,7 +2477,7 @@ void setup()
 
   // Initialize PD_Ref_Array
   int iniEP = 700;
-  if (false)
+  if (true)
   {
     for (size_t i = 0; i < sizeof(EP_PD_Ref_Array) / sizeof(EP_PD_Ref_Array[0]); i++)
     {
@@ -2486,7 +2491,8 @@ void setup()
       eepromString = ReadInfoEEPROM(EP_PD_Ref_Array[i][1], 8);
       PD_Ref_Array[i][1] = isNumberic(eepromString) ? eepromString.toDouble() : PD_Ref_Array[i][1];
 
-      Serial.printf("[%d, %d]:[%.0f, %.2f]\n", EP_PD_Ref_Array[i][0], EP_PD_Ref_Array[i][1], PD_Ref_Array[i][0], PD_Ref_Array[i][1]);
+      if (false)
+        Serial.printf("[%d, %d]:[%.0f, %.2f]\n", EP_PD_Ref_Array[i][0], EP_PD_Ref_Array[i][1], PD_Ref_Array[i][0], PD_Ref_Array[i][1]);
     }
   }
 
@@ -2782,7 +2788,7 @@ void setup()
         &Task_1,         /* 對應的任務變數位址 */
         0);              /*指定在核心0執行 */
   }
-  else if (Station_Type == 3)
+  else if (Station_Type == 3 || Station_Type == 4)
   {
     if (IsDirtReverse_X == 1)
     {
@@ -2802,7 +2808,11 @@ void setup()
       Z_DIR_False = true;
     }
 
-    GetPower_Mode = 4;
+    if (Station_Type == 3)
+      GetPower_Mode = 4;
+    else if (Station_Type == 4)
+      GetPower_Mode = 1;
+
     MSGOutput("Set GetPowerMode is :" + String(GetPower_Mode));
 
     // 在core 0啟動 Task_2_sendData (接收遙控盒訊息)
@@ -2938,7 +2948,7 @@ bool Fine_Scan(int axis, bool Trip2Stop)
   MSGOutput("");
   MSGOutput("Fine Scan ");
 
-  if (Station_Type == 3)
+  if (Station_Type == 3 || Station_Type == 4)
   {
     StopValue = Target_IL;
     isMotorManualCtr = false;
@@ -3013,15 +3023,13 @@ bool Fine_Scan(int axis, bool Trip2Stop)
       PD_Now = Cal_PD_Input_IL(2 * Get_PD_Points);
 
       CMDOutput("AS");
-      // K_OK = AutoAlign_Scan_DirectionJudge_V3(Z_Dir, FS_Count_Z, FS_Steps_Z * MotorStepRatio, FS_Stable_Z, MotorCC_Z, FS_DelaySteps_Z, 0, FS_Avg_Z, FS_Trips_Z, "Z Fine-Scan,Trip_");
-      K_OK = Scan_AllRange_TwoWay(2, FS_Count_Z, FS_Steps_Z * MotorStepRatio, FS_Stable_Z, 0, FS_DelaySteps_Z, StopValue, FS_Avg_Z, FS_Trips_Z, "Z Fine-Scan,Trip_");
+      K_OK = Scan_AllRange_TwoWay(2, FS_Count_Z, FS_Steps_Z * MotorStepRatio, FS_Stable_Z, MotorCC_Z, FS_DelaySteps_Z, StopValue, FS_Avg_Z, FS_Trips_Z, "Z Fine-Scan,Trip_");
       CMDOutput("%:");
 
       if (!K_OK)
       {
         CMDOutput("AS");
-        // AutoAlign_Scan_DirectionJudge_V3(Z_Dir, FS_Count_Z, FS_Steps_Z * MotorStepRatio, FS_Stable_Z, MotorCC_Z, FS_DelaySteps_Z, 0, FS_Avg_Z, FS_Trips_Z, "Z Fine-Scan,Trip_");
-        Scan_AllRange_TwoWay(2, FS_Count_Z, FS_Steps_Z * MotorStepRatio, FS_Stable_Z, 0, FS_DelaySteps_Z, StopValue, FS_Avg_Z, FS_Trips_Z, "Z Re-Scan,Trip_");
+        Scan_AllRange_TwoWay(2, FS_Count_Z, FS_Steps_Z * MotorStepRatio, FS_Stable_Z, MotorCC_Z, FS_DelaySteps_Z, StopValue, FS_Avg_Z, FS_Trips_Z, "Z Re-Scan,Trip_");
         CMDOutput("%:");
       }
 
@@ -3069,7 +3077,7 @@ bool Fine_Scan(int axis, bool Trip2Stop)
   // LCD_Update_Mode = 0;
   // LCD_PageNow = 100;
 
-  if (Station_Type == 3)
+  if (Station_Type == 3 || Station_Type == 4)
   {
     isMotorManualCtr = true;
   }
@@ -5251,7 +5259,7 @@ int Function_Classification(String cmd, int ButtonSelected)
 
       // cmd.remove(0, 3);
       cmd_No = cmd.toInt();
-      delay(10);
+      delay(2);
     }
   }
   else if (ButtonSelected >= 0)
@@ -5370,6 +5378,15 @@ int Function_Msg_Classification(String cmd, int ButtonSelected)
         MSGOutput("IL:" + String(Cal_PD_Input_IL(Get_PD_Points)));
         break;
       }
+    }
+
+    else if (Contains(cmd, "GetILMode"))
+    {
+      isKeepGetIL = true;
+      isMotorManualCtr = false;
+      Serial.println("GetILMode");
+
+      return 0;
     }
 
     // Get Ref Command
@@ -6182,7 +6199,7 @@ int Function_Excecutation(String cmd, int cmd_No)
         {
           DataSent_Controller("FS");
 
-          if (Station_Type == 3)
+          if (Station_Type == 3 || Station_Type == 4)
             StopValue = Target_IL;
           else
             StopValue = 0; // 0 dB
@@ -7692,4 +7709,47 @@ bool isNumberic(String str)
     return false;
   }
   return true;
+}
+
+/// @brief 判斷是否收到IL?訊息
+void SendIL()
+{
+  if (isKeepGetIL && Serial.available())
+  {
+    String cmd = Serial.readString();
+
+    if (Contains(cmd, "IL?"))
+    {
+      switch (GetPower_Mode)
+      {
+      case 1:
+        MSGOutput(String(Cal_PD_Input_IL(Get_PD_Points)));
+        break;
+
+      case 2:
+        MSGOutput(String(Cal_PD_Input_Dac(Get_PD_Points)));
+        break;
+
+      case 3:
+        MSGOutput(String(Cal_PD_Input_Row_IL(Get_PD_Points)));
+        break;
+
+      case 4:
+        MSGOutput(String(Cal_PD_Input_Row_Dac(Get_PD_Points)));
+        break;
+
+      default:
+        MSGOutput(String(Cal_PD_Input_IL(Get_PD_Points)));
+        break;
+      }
+    }
+
+    else if (Contains(cmd, "cmd30"))
+    {
+      isKeepGetIL = false;
+      isMotorManualCtr = true;
+      isStop = true;
+      Serial.println("EmergencyStop");
+    }
+  }
 }

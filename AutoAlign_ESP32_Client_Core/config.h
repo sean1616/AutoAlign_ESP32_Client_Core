@@ -4,7 +4,7 @@
 #include "Arduino.h"
 #include "ep_adrs.h"
 
-/// @brief 0 is CTF, 1 is VOA-Heater, 2 is VOA-No Heater, 3 is 3D Switch/WOA
+/// @brief 0 is CTF, 1 is VOA-Heater, 2 is VOA-No Heater, 3 is 3D Switch/WOA, 4 is 3D Switch Passive Align
 byte Station_Type = 0;
 
 const byte X_STP_Pin = 15; // x軸 步進控制Pulse
@@ -196,6 +196,7 @@ double StopValue = 0;
 int cmd_No = 0;
 bool isStop = false, isGetPower = false, isILStable = false;
 bool isCheckStop = false;
+bool isKeepGetIL = false;
 bool sprial_JumpToBest = true;
 int Q_State = 0;
 unsigned long Q_Time = 0;
