@@ -2341,8 +2341,9 @@ void setup()
   EEPROM.begin(4096); // 宣告使用EEPROM 4096 個位置
 
   // I2C Setting for 16 bits adc (Get PD value)
-  I2CADS.begin(I2C_SDA, I2C_SCL, 100000);
+  I2CADS.begin(I2C_SDA, I2C_SCL, 400000);
   ads.setGain(GAIN_TWO); // 2x gain   +/- 2.048V  1 bit = 0.0625mV
+  ads.setDataRate(RATE_ADS1115_860SPS);
   if (!ads.begin(0x48, &I2CADS))
   {
     Serial.println("Failed to initialize ADS.");
