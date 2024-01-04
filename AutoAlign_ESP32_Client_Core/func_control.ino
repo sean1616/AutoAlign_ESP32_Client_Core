@@ -42,7 +42,8 @@ double Cal_PD_Input_Dac(int averageCount)
   double PDAvgInput = 0;
   for (int i = 0; i < averageCount; i++)
   {
-    PDAvgInput += ads.readADC_SingleEnded(0);
+    PDAvgInput += ads.getRawResult();
+    // PDAvgInput += ads.readADC_SingleEnded(0);
   }
 
   // Function: (PD Value) - (reference) + 300
@@ -71,7 +72,8 @@ double Cal_PD_Input_IL(int averageCount)
 
   for (int i = 0; i < averageCount; i++)
   {
-    PDAvgInput += ads.readADC_SingleEnded(0);
+    PDAvgInput += ads.getRawResult();
+    // PDAvgInput += ads.readADC_SingleEnded(0);
   }
 
   averagePDInput = (PDAvgInput / averageCount);
@@ -100,7 +102,8 @@ double Cal_PD_Input_Row_IL(int averageCount)
   double PDAvgInput = 0;
   for (int i = 0; i < averageCount; i++)
   {
-    PDAvgInput += ads.readADC_SingleEnded(0);
+    PDAvgInput += ads.getRawResult();
+    // PDAvgInput += ads.readADC_SingleEnded(0);
   }
   // Function: (PD Value)
   averagePDInput = (PDAvgInput / averageCount);
@@ -129,7 +132,8 @@ double Cal_PD_Input_Row_Dac(int averageCount)
   double PDAvgInput = 0;
   for (int i = 0; i < averageCount; i++)
   {
-    PDAvgInput += ads.readADC_SingleEnded(0);
+    PDAvgInput += ads.getRawResult();
+    // PDAvgInput += ads.readADC_SingleEnded(0);
   }
   averagePDInput = (PDAvgInput / averageCount);
 

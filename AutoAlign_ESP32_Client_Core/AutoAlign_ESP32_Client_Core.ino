@@ -408,7 +408,8 @@ void Task_1_Encoder(void *pvParameters)
     }
     else if (isKeepGetIL)
     {
-      SendIL();
+      // SendIL();
+      delay(50);
       continue;
     }
     else
@@ -2341,14 +2342,46 @@ void setup()
   EEPROM.begin(4096); // 宣告使用EEPROM 4096 個位置
 
   // I2C Setting for 16 bits adc (Get PD value)
-  I2CADS.begin(I2C_SDA, I2C_SCL, 400000);
-  ads.setGain(GAIN_TWO); // 2x gain   +/- 2.048V  1 bit = 0.0625mV
-  ads.setDataRate(RATE_ADS1115_860SPS);
-  if (!ads.begin(0x48, &I2CADS))
+  // I2CADS.begin(I2C_SDA, I2C_SCL, 400000);
+  // ads.setGain(GAIN_TWO); // 2x gain   +/- 2.048V  1 bit = 0.0625mV
+  // ads.setDataRate(RATE_ADS1115_860SPS);
+  // if (!ads.begin(0x48, &I2CADS))
+  // {
+  //   Serial.println("Failed to initialize ADS.");
+  //   isGetPower = false;
+  // }
+
+  Wire.begin();
+  Wire.setClock(400000);
+  pinMode(interruptPin, INPUT_PULLUP);
+  if (!ads.init())
   {
-    Serial.println("Failed to initialize ADS.");
-    isGetPower = false;
+    Serial.println("ADS1115 not connected!");
   }
+
+  /* Set the voltage range of the ADC to adjust the gain
+   * Please note that you must not apply more than VDD + 0.3V to the input pins!  */
+  ads.setVoltageRange_mV(ADS1115_RANGE_2048); // comment line/change parameter to change range
+
+  /* Set the inputs to be compared  */
+  ads.setCompareChannels(ADS1115_COMP_0_GND); // comment line/change parameter to change channels
+
+  ads.setAlertPinMode(ADS1115_ASSERT_AFTER_1); // needed in this sketch to enable alert pin (doesn't matter if you choose after 1,2 or 4)
+
+  /* Set the conversion rate in SPS (samples per second)  */
+  ads.setConvRate(ADS1115_860_SPS); // comment line/change parameter to change SPS
+
+  ads.setMeasureMode(ADS1115_CONTINUOUS); // the conversion ready alert pin also works in continuous mode
+
+  ads.setAlertPinToConversionReady(); // needed for this sketch
+
+  attachInterrupt(digitalPinToInterrupt(interruptPin), convReadyAlert, FALLING);
+  oldTime = micros();
+
+  convReady = true;
+
+  Serial.println("ADS1115 Example Sketch - Continuious, Conversion Ready Alert Pin controlled");
+  Serial.println();
 
   String epString = ReadInfoEEPROM(EP_Station_Type, 8);
   Station_Type = isNumberic(epString) ? epString.toInt() : Station_Type;
@@ -2776,6 +2809,8 @@ void setup()
   disableCore0WDT(); // Disable watch dog
   disableCore1WDT(); // Disable watch dog
 
+  // Station_Type = 8;
+
   // Check Server is connected
   if (Station_Type == 0)
   {
@@ -2816,6 +2851,8 @@ void setup()
 
     MSGOutput("Set GetPowerMode is :" + String(GetPower_Mode));
 
+    isWiFiConnected = false;
+
     // 在core 0啟動 Task_2_sendData (接收遙控盒訊息)
     xTaskCreatePinnedToCore(
         Task_1_Encoder, /* 任務實際對應的Function */
@@ -2841,6 +2878,8 @@ String Txt_SpiralSetting = "";
 String Txt_LineScanSetting = "";
 int LoopCount = 0;
 
+// int count;
+
 void loop()
 {
   unsigned long currentMillis = millis();
@@ -2848,8 +2887,40 @@ void loop()
 
   if (currentMillis - previousMillis >= interval)
   {
+    if (isKeepGetIL)
+    {
+      while (!isStop)
+      {
+        SendIL();
+        delay(1);
+      }
+    }
+
     LoopCount++;
     previousMillis = currentMillis;
+
+    // count = 0;
+    // while (count < 20)
+    // { // get 4 readings
+    //   if (true)
+    //   {
+    //     currTime = micros();
+    //     readData[count].voltage = ads.getRawResult(); // alternative: getResult_mV for Millivolt
+    //     readData[count].cvtTime = currTime - oldTime;
+    //     count++; // get next reading
+    //     oldTime = currTime;
+    //     convReady = false; // reset ready indicator
+    //   }
+    // }
+    // Serial << "Time uSec  Voltage" << endl;
+    // for (uint8_t i = 0; i < 20; i++)
+    // { // display 4 readings
+    //   Serial << readData[i].cvtTime << "  " << readData[i].voltage << endl;
+    // }
+    // delay(1000);       // delay to change voltage
+    // convReady = false; // reset ready indicator
+    // oldTime = micros();
+    // return;
 
     // Re-Initialize
     isStop = false;
@@ -5383,8 +5454,9 @@ int Function_Msg_Classification(String cmd, int ButtonSelected)
 
     else if (Contains(cmd, "GetILMode"))
     {
-      isKeepGetIL = true;
       isMotorManualCtr = false;
+      isCheckStop = false;
+      isKeepGetIL = true;
       Serial.println("GetILMode");
 
       return 0;
@@ -6069,7 +6141,8 @@ int Function_Msg_Classification(String cmd, int ButtonSelected)
 
             averagePDInput = 0;
             for (int i = 0; i < 20; i++)
-              averagePDInput += ads.readADC_SingleEnded(0);
+              averagePDInput += ads.getResult_V(); // alternative: getResult_mV for Millivolt
+            // averagePDInput += ads.readADC_SingleEnded(0);
 
             averagePDInput = (averagePDInput / 20);
 
@@ -6824,7 +6897,8 @@ int Function_Excecutation(String cmd, int cmd_No)
 
           averagePDInput = 0;
           for (int i = 0; i < 20; i++)
-            averagePDInput += ads.readADC_SingleEnded(0);
+            averagePDInput += ads.getRawResult(); // alternative: getResult_mV for Millivolt
+          // averagePDInput += ads.readADC_SingleEnded(0);
 
           averagePDInput = (averagePDInput / 20);
 
@@ -7719,6 +7793,8 @@ void SendIL()
   {
     String cmd = Serial.readString();
 
+    // oldTime = millis();
+
     if (Contains(cmd, "IL?"))
     {
       switch (GetPower_Mode)
@@ -7749,8 +7825,14 @@ void SendIL()
     {
       isKeepGetIL = false;
       isMotorManualCtr = true;
+      isCheckStop = true;
       isStop = true;
       Serial.println("EmergencyStop");
     }
+
+    // currTime = millis();
+
+    // Serial << "ts:"
+    //        << (currTime - oldTime) << endl;
   }
 }
