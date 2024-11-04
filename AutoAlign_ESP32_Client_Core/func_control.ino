@@ -285,7 +285,7 @@ void step(byte stepperPin, long steps, int delayTime, bool dirt_input)
       if (dirt_input == dirN)
       {
         digitalWrite(X_DIR_Pin, !dirt_input);
-        delay(8);
+        delay(1);
         dirN = digitalRead(X_DIR_Pin);
       }
     }
@@ -295,7 +295,7 @@ void step(byte stepperPin, long steps, int delayTime, bool dirt_input)
       if (dirt_input != dirN)
       {
         digitalWrite(X_DIR_Pin, dirt_input);
-        delay(8);
+        delay(1);
         dirN = digitalRead(X_DIR_Pin);
       }
     }
@@ -310,7 +310,7 @@ void step(byte stepperPin, long steps, int delayTime, bool dirt_input)
       if (dirt_input == dirN)
       {
         digitalWrite(Y_DIR_Pin, !dirt_input);
-        delay(8);
+        delay(1);
         dirN = digitalRead(Y_DIR_Pin);
       }
     }
@@ -320,7 +320,7 @@ void step(byte stepperPin, long steps, int delayTime, bool dirt_input)
       if (dirt_input != dirN)
       {
         digitalWrite(Y_DIR_Pin, dirt_input);
-        delay(8);
+        delay(1);
         dirN = digitalRead(Y_DIR_Pin);
       }
     }
@@ -335,7 +335,7 @@ void step(byte stepperPin, long steps, int delayTime, bool dirt_input)
       if (dirt_input == dirN)
       {
         digitalWrite(Z_DIR_Pin, !dirt_input);
-        delay(8);
+        delay(1);
         dirN = digitalRead(Z_DIR_Pin);
       }
     }
@@ -345,7 +345,7 @@ void step(byte stepperPin, long steps, int delayTime, bool dirt_input)
       if (dirt_input != dirN)
       {
         digitalWrite(Z_DIR_Pin, dirt_input);
-        delay(8);
+        delay(1);
         dirN = digitalRead(Z_DIR_Pin);
       }
     }
@@ -353,21 +353,46 @@ void step(byte stepperPin, long steps, int delayTime, bool dirt_input)
 
   steps = abs(steps);
 
+  // 假設最大延遲、最小延遲、加速步數
+  const int maxDelay = delayTime * 4; // 馬達啟動時的最大延遲（減速時會逐步接近此值）
+  const int minDelay = delayTime;     // 馬達運行時的最小延遲（即最高速度的延遲）
+  const long accelSteps = 500;        // 加速步數，用於線性增加速度
+
+  bool IsAccMode = (steps > accelSteps * 2) ? true : false;
+  int delayNow = IsAccMode ? maxDelay : delayTime;
+
   for (long i = 0; i < steps; i++)
   {
     digitalWrite(stepperPin, HIGH);
-    delayMicroseconds(delayTime);
+    delayMicroseconds(delayNow);
     digitalWrite(stepperPin, LOW);
-    delayMicroseconds(delayTime);
+    delayMicroseconds(delayNow);
 
     if (isStop)
     {
       steps -= (i + 1);
       break;
     }
-  }
 
-  // MSGOutput("dirN:" + String(dirN) + ", dirJ:" + String(dir_Judge) + ", dirIn:" + String(dirt_input));
+    if (IsAccMode)
+    {
+      // 加速階段
+      if (i < accelSteps && delayNow > minDelay)
+      {
+        delayNow = maxDelay - ((maxDelay - minDelay) * i / accelSteps);
+      }
+      // 減速階段
+      else if (i > steps - accelSteps && delayNow < maxDelay)
+      {
+        delayNow = minDelay + ((maxDelay - minDelay) * (i - (steps - accelSteps)) / accelSteps);
+      }
+      // 保持最小延遲（最大速度）
+      else
+      {
+        delayNow = minDelay;
+      }
+    }
+  }
 
   // Position Record
   if (dirN == dir_Judge)
@@ -503,24 +528,24 @@ void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delay
 {
   if (moveSteps > 0)
   {
-    // MotorCC_A = dirt;
-
-    // if(dir_pin == X_DIR_Pin){
-    //     if (dirt)
-    //       dirt = Z_DIR_False;
-    // }
-
-    // digitalWrite(dir_pin, dirt);
-    // delay(pinDelay);
+    unsigned long preMillis = millis();
 
     step(stp_pin, moveSteps, delayStep, dirt);
-    delay(stableDelay);
+
+    if (stableDelay > 0)
+      delay(stableDelay);
 
     if (isOutputPosition)
     {
-      delay(3); // 一定要delay，可避免記憶體存取衝突
+      // if (stableDelay == 0)
+      //   delay(1); // 一定要delay，可避免記憶體存取衝突 3ms
+
       DataOutput(false);
     }
+
+    unsigned long currentMillis = millis();
+
+    MSGOutput("ts:" + String(currentMillis - preMillis) + " ms");
   }
 }
 
@@ -872,6 +897,9 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT)
 
 void Move_Motor_abs_all(long x, long y, long z, int DelayT)
 {
+  unsigned long preMillis = millis();
+  // MSGOutput("DelayT:" + String(DelayT) + " us");
+
   struct_Motor_Pos TargetPos;
   TargetPos.X = x;
   TargetPos.Y = y;
@@ -880,6 +908,10 @@ void Move_Motor_abs_all(long x, long y, long z, int DelayT)
 
   // MSGOutput("Move All Abs End");
   DataOutput(false);
+
+  unsigned long currentMillis = millis();
+
+  MSGOutput("ts:" + String(currentMillis - preMillis) + " ms");
 }
 
 void Move_Motor_abs_all(int x, int y, int z, bool IsMsg, int DelayT)

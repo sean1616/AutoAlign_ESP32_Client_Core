@@ -179,7 +179,7 @@ int AA_ScanFinal_Scan_Steps_Z_A = 125;
 int AA_ScanFinal_Scan_Steps_Y_A = 20;
 int AA_ScanFinal_Scan_Steps_X_A = 20;
 
-int AQ_Scan_Compensation_Steps_Z_A = 12;
+int AQ_Scan_Compensation_Steps_Z_A = 0;
 int AQ_Scan_Steps_Z_A = 130;
 int AQ_Scan_Steps_Z_B = 130;
 int AQ_Scan_Steps_Z_C = 130;
@@ -291,10 +291,10 @@ void step(byte stepperPin, long steps, int delayTime, bool dir);
 // void step(byte stepperPin, long steps, int delayTime, byte dirPin, bool dir);
 void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep, int stableDelay, bool isOutputPosition = false, int pinDelay = 8);
 void Move_Motor_abs(int xyz, long Target);
-void Move_Motor_abs_async(struct_Motor_Pos TargetPos, int DelayT = 40);
-void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT = 10);
-void Move_Motor_abs_all(long x, long y, long z, int DelayT = 6);
-void Move_Motor_abs_all(int x, int y, int z, bool IsMsg, int DelayT = 10);
+void Move_Motor_abs_async(struct_Motor_Pos TargetPos, int DelayT = 5);
+void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT = 5);
+void Move_Motor_abs_all(long x, long y, long z, int DelayT = 5);
+void Move_Motor_abs_all(int x, int y, int z, bool IsMsg, int DelayT = 5);
 void Move_Motor_Cont(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep);
 
 #endif
