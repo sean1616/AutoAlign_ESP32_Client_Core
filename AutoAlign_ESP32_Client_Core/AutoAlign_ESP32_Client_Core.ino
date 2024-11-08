@@ -45,7 +45,6 @@ void CleanEEPROM(int startPosition, int datalength)
   for (size_t i = startPosition; i < (startPosition + datalength); i++)
   {
     EEPROM.write(i, ' ');
-    // EEPROM.write(i, 0);
   }
 }
 
@@ -54,6 +53,36 @@ void WriteInfoEEPROM(String data, int start_position)
   for (int i = 0; i < data.length(); ++i)
   {
     EEPROM.write(i + start_position, data[i]);
+  }
+}
+
+/// @brief Comine CleanEEPROM and WriteInfoEEPROM together
+/// @param data
+/// @param start_position
+/// @param maxDataLength
+void WriteInfoEEPROM(int start_position, String data, int maxDataLength)
+{
+  if (data.length() > maxDataLength)
+  {
+    for (int i = start_position; i < (start_position + maxDataLength); i++)
+    {
+      EEPROM.write(i, ' ');
+    }
+
+    for (int i = 0; i < data.length(); ++i)
+    {
+      EEPROM.write(i + start_position, data[i]);
+    }
+  }
+  else
+  {
+    for (int i = 0; i < maxDataLength; ++i)
+    {
+      if (i < data.length())
+        EEPROM.write(i + start_position, data[i]);
+      else
+        EEPROM.write(i + start_position, ' ');
+    }
   }
 }
 
@@ -549,6 +578,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
     STP_Pin = X_STP_Pin;
     backlash = X_backlash;
     GradientTarget = FS_GradientTarget_X; // 0.003
+    msg = "X" + msg;
     delay(1);
     break;
   case Y_Dir:
@@ -556,6 +586,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
     STP_Pin = Y_STP_Pin;
     backlash = Y_backlash;
     GradientTarget = FS_GradientTarget_Y; // 0.002
+    msg = "Y" + msg;
     delay(1);
     break;
   case Z_Dir:
@@ -563,6 +594,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
     STP_Pin = Z_STP_Pin;
     backlash = Z_backlash;
     GradientTarget = FS_GradientTarget_Z; // 0.003
+    msg = "Z" + msg;
     delay(1);
     break;
   }
@@ -574,17 +606,19 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
   }
 
   MSGOutput("Scan Two Way");
+
+  MSGOutput("isWiFiConnected : " + String(isWiFiConnected));
+  CMDOutput(">>" + msg + String(trip));
+
   MSGOutput("Scan Step: " + String(motorStep));
   MSGOutput("StopValue:" + String(StopPDValue));
   MSGOutput("Backlash: " + String(backlash));
   MSGOutput("GradientTarget : " + String(GradientTarget, 4));
-  MSGOutput("isWiFiConnected : " + String(isWiFiConnected));
-  CMDOutput(">>" + msg + String(trip));
 
   double PD_initial = Cal_PD_Input_IL(Get_PD_Points);
   MSGOutput("Initial PD: " + String(PD_initial));
 
-  MSGOutput("ts:" + String(millis() - timer_1) + " ms");
+  // MSGOutput("ts:" + String(millis() - timer_1) + " ms");
 
   maxIL_in_FineScan = PD_initial;
   minIL_in_FineScan = PD_initial;
@@ -596,12 +630,12 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
 
   step(STP_Pin, motorStep * count, delayBetweenStep, Direction); // First Jump
   delay(stableDelay * 1.5);                                      // Default : 100
-  PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+  PD_Now = Get_IL_DAC(Get_PD_Points);
 
   DataOutput(PD_Now);
   DataOutput(XYZ, PD_Now); // int xyz, double pdValue
 
-  MSGOutput("ts:" + String(millis() - timer_1) + " ms");
+  // MSGOutput("ts:" + String(millis() - timer_1) + " ms");
 
   Serial.println("Jump IL: " + String(PD_Now));
 
@@ -648,7 +682,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
     delay(stableDelay);
 
     // 記錄IL
-    PD_Value[i] = Cal_PD_Input_IL(Get_PD_Points);
+    PD_Value[i] = Get_IL_DAC(Get_PD_Points);
 
     // 記錄位置
     Step_Value[i] = Get_Position(XYZ);
@@ -669,7 +703,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
     DataOutput(PD_Value[i]);
     DataOutput(XYZ, PD_Value[i]); // int xyz, double pdValue
 
-    MSGOutput("ts : " + String(millis() - timer_1) + " ms");
+    // MSGOutput("ts : " + String(millis() - timer_1) + " ms");
 
     // Gradient analyze
     if (i > 0)
@@ -682,6 +716,8 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
         Gradient_IL_Step[i - 1] *= (FS_Steps_Z / FS_Steps_X);
       }
 
+      MSGOutput("SlopeNow : " + String(Gradient_IL_Step[i - 1]));
+
       if (Gradient_IL_Step[i - 1] <= (GradientTarget * -1))
       {
         GradientCount = 0;
@@ -689,13 +725,12 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
         GradientDownCount++;
 
         // 曲線前半段正向上升，並已過最佳點
-        if (isGradCountFixGauss && PD_Value[i] > -4)
+        if (isGradCountFixGauss && GradientDownCount > 2 && PD_Value[i] > -4)
         {
           // Curfit
           if (indexofBestIL != 0 && Pos_Best_Trip1 != Get_Position(XYZ))
           {
-            double x[3];
-            double y[3];
+            double x[3], y[3];
             for (int k = -1; k < 2; k++)
             {
               x[k + 1] = Step_Value[indexofBestIL + k]; // idex * step = real steps
@@ -706,7 +741,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
             MSGOutput("Best pos in Trip_1 (curfit) : " + String(Pos_Best_Trip1));
           }
 
-          MSGOutput("Pass best IL");
+          MSGOutput("Pass best IL (Slope)");
 
           break;
         }
@@ -717,13 +752,11 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
           // Curfit
           if (indexofBestIL != 0 && Pos_Best_Trip1 != Get_Position(XYZ))
           {
-            double x[3];
-            double y[3];
+            double x[3], y[3];
             for (int k = -1; k < 2; k++)
             {
               x[k + 1] = Step_Value[indexofBestIL + k]; // idex * step = real steps
               y[k + 1] = PD_Value[indexofBestIL + k];   // fill this with your sensor data
-              // Serial.println("Point : " + String(x[k + 1]) + " , " + String(y[k + 1]));
             }
             Pos_Best_Trip1 = Curfit(x, y, 3);
 
@@ -740,7 +773,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
         GradientCount++;
         GradientDownCount = 0;
 
-        // 判斷圖形是否為順向曲線(擬合高斯)
+        // 判斷圖形是否為順向曲線
         if (GradientCount > 3 && !isGradCountFixGauss)
           isGradCountFixGauss = true;
       }
@@ -752,7 +785,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
 
         if (XYZ == Z_Dir && GradientCount > 4)
         {
-          MSGOutput("i:" + String(i) + ", Pos_Best_Trip1(Curfit):" + String(Pos_Best_Trip1));
+          MSGOutput("i:" + String(i) + ", Pos_Best_Trip1(Row):" + String(Pos_Best_Trip1));
           double x[5], y[5];
           for (int k = i - 4; k <= i; k++)
           {
@@ -760,7 +793,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
             y[k - (i - 4)] = PD_Value[k];   // fill this with your sensor data
           }
           Pos_Best_Trip1 = Curfit_2(x, y, 5);
-          MSGOutput("Best pos in Trip_1 (curfit) : " + String(Pos_Best_Trip1));
+          MSGOutput("Best pos in Trip_1 (Curfit) : " + String(Pos_Best_Trip1));
         }
 
         DataOutput(PD_Value[i]);
@@ -774,7 +807,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
     }
 
     // 結束Trip 1, 進行curfitting
-    if (IL_Best_Trip1 >= -2 && PD_Value[i] <= (IL_Best_Trip1 - 1.5) && Trips == 1 && i > 4)
+    if (false && IL_Best_Trip1 >= -2 && PD_Value[i] <= (IL_Best_Trip1 - 1.5) && Trips == 1 && i > 4)
     {
       Serial.println("IL < (IL-1.5): " + String(PD_Value[i]));
 
@@ -807,7 +840,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
       if ((PD_Value[i] <= PD_Value[i - 1] || abs(PD_Value[i] - PD_Value[i - 1]) <= 0.02) && PD_Value[i] >= -1.8)
       {
         MSGOutput("Over best IL in trip 1");
-        PD_Now = Cal_PD_Input_IL(2 * Get_PD_Points);
+        PD_Now = Get_IL_DAC(2 * Get_PD_Points);
         MSGOutput("Final IL: " + String(PD_Now));
         CMDOutput("t:" + String((millis() - timer_1) * 0.001, 2));
         DataOutput(PD_Now);
@@ -893,7 +926,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
       step(STP_Pin, motorStep, delayBetweenStep, MotorCC_A);
       delay(stableDelay);
 
-      PD_Value[i] = Cal_PD_Input_IL(Get_PD_Points);
+      PD_Value[i] = Get_IL_DAC(Get_PD_Points);
       Step_Value[i] = Get_Position(XYZ);
 
       if (PD_Value[i] > IL_Best_Trip2)
@@ -935,7 +968,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
         }
       }
 
-      if (IL_Best_Trip1 >= -2.5 && PD_Value[i] <= (IL_Best_Trip1 - 1.5) && Trips == 1)
+      if (false && IL_Best_Trip1 >= -2.5 && PD_Value[i] <= (IL_Best_Trip1 - 1.5) && Trips == 1)
       {
         Serial.println("IL < (IL-1.5): " + String(PD_Value[i]));
         break;
@@ -988,13 +1021,13 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
 
       MSGOutput("Best pos in Trip_2 : " + String(Pos_Best_Trip2)); //------------Best in Trip_2----------------
 
-      if (AQ_Scan_Compensation_Steps_Z_A != 0)
-      {
-        if (XYZ == 2)
-          Pos_Best_Trip2 = Pos_Best_Trip2 - (AQ_Scan_Compensation_Steps_Z_A * MotorStepRatio);
+      // if (AQ_Scan_Compensation_Steps_Z_A != 0)
+      // {
+      //   if (XYZ == 2)
+      //     Pos_Best_Trip2 = Pos_Best_Trip2 - (AQ_Scan_Compensation_Steps_Z_A * MotorStepRatio);
 
-        MSGOutput("Best pos in Trip_2 (Compensation) : " + String(Pos_Best_Trip2));
-      }
+      //   MSGOutput("Best pos in Trip_2 (Compensation) : " + String(Pos_Best_Trip2));
+      // }
 
       PD_Best = IL_Best_Trip2;
 
@@ -1008,7 +1041,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
 
       if (Pos_Best_Trip1 == Get_Position(XYZ))
       {
-        PD_Now = Cal_PD_Input_IL(2 * Get_PD_Points);
+        PD_Now = Get_IL_DAC(2 * Get_PD_Points);
 
         CMDOutput("t:" + String((millis() - timer_1) * 0.001, 2));
 
@@ -1023,12 +1056,12 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
 
         delay(stableDelay * 1.5); // 100
 
-        PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+        PD_Now = Get_IL_DAC(Get_PD_Points);
         DataOutput(PD_Now);
         DataOutput(XYZ, PD_Now); // int xyz, double pdValue
       }
 
-      MSGOutput("Best in Trip_1 (Compensation) : " + String(Pos_Best_Trip1));
+      MSGOutput("Best in Trip_1 : " + String(Pos_Best_Trip1));
 
       BestPos = Pos_Best_Trip1;
     }
@@ -1037,7 +1070,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
     if (!isTrip3Jump)
     {
       int failCount = 0;
-      double preIL = Cal_PD_Input_IL(Get_PD_Points);
+      double preIL = Get_IL_DAC(Get_PD_Points);
 
       while (true)
       {
@@ -1051,7 +1084,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
 
           Move_Motor(DIR_Pin, STP_Pin, MotorCC_A, motorStep, delayBetweenStep, stableDelay); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
 
-          PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+          PD_Now = Get_IL_DAC(Get_PD_Points);
           DataOutput(XYZ, PD_Now); // int xyz, double pdValue
 
           if (PD_Now >= StopPDValue)
@@ -1082,7 +1115,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
         else if (deltaPos > 0 && deltaPos < motorStep)
         {
           Move_Motor(DIR_Pin, STP_Pin, MotorCC_A, deltaPos, delayBetweenStep, 0); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
-          PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+          PD_Now = Get_IL_DAC(Get_PD_Points);
           DataOutput(XYZ, PD_Now); // int xyz, double pdValue
           break;
         }
@@ -1094,7 +1127,7 @@ bool Scan_AllRange_TwoWay(int XYZ, int count, int motorStep, int stableDelay,
     {
       Move_Motor_abs(XYZ, BestPos); //(dir_pin, stp_pin, direction, steps, delaybetweensteps, stabledelay)
       delay(stableDelay * 1.5);
-      PD_Now = Cal_PD_Input_IL(Get_PD_Points);
+      PD_Now = Get_IL_DAC(Get_PD_Points);
       DataOutput(PD_Now);
       DataOutput(XYZ, PD_Now); // int xyz, double pdValue
       MSGOutput("Trip 3 Jump : " + String(BestPos));
@@ -2234,46 +2267,46 @@ void setup()
   EEPROM.begin(4096); // 宣告使用EEPROM 4096 個位置
 
   // I2C Setting for 16 bits adc (Get PD value)
-  // I2CADS.begin(I2C_SDA, I2C_SCL, 400000);
-  // ads.setGain(GAIN_TWO); // 2x gain   +/- 2.048V  1 bit = 0.0625mV
-  // ads.setDataRate(RATE_ADS1115_860SPS);
-  // if (!ads.begin(0x48, &I2CADS))
-  // {
-  //   Serial.println("Failed to initialize ADS.");
-  //   isGetPower = false;
-  // }
-
-  Wire.begin();
-  Wire.setClock(400000);
-  pinMode(interruptPin, INPUT_PULLUP);
-  if (!ads.init())
+  I2CADS.begin(I2C_SDA, I2C_SCL, 400000);
+  ads.setGain(GAIN_TWO); // 2x gain   +/- 2.048V  1 bit = 0.0625mV
+  ads.setDataRate(RATE_ADS1115_860SPS);
+  if (!ads.begin(0x48, &I2CADS))
   {
-    Serial.println("ADS1115 not connected!");
+    Serial.println("Failed to initialize ADS.");
+    isGetPower = false;
   }
 
-  /* Set the voltage range of the ADC to adjust the gain
-   * Please note that you must not apply more than VDD + 0.3V to the input pins!  */
-  ads.setVoltageRange_mV(ADS1115_RANGE_2048); // comment line/change parameter to change range
+  // Wire.begin();
+  // Wire.setClock(400000);
+  // pinMode(interruptPin, INPUT_PULLUP);
+  // if (!ads.init())
+  // {
+  //   Serial.println("ADS1115 not connected!");
+  // }
 
-  /* Set the inputs to be compared  */
-  ads.setCompareChannels(ADS1115_COMP_0_GND); // comment line/change parameter to change channels
+  // /* Set the voltage range of the ADC to adjust the gain
+  //  * Please note that you must not apply more than VDD + 0.3V to the input pins!  */
+  // ads.setVoltageRange_mV(ADS1115_RANGE_2048); // comment line/change parameter to change range
 
-  ads.setAlertPinMode(ADS1115_ASSERT_AFTER_1); // needed in this sketch to enable alert pin (doesn't matter if you choose after 1,2 or 4)
+  // /* Set the inputs to be compared  */
+  // ads.setCompareChannels(ADS1115_COMP_0_GND); // comment line/change parameter to change channels
 
-  /* Set the conversion rate in SPS (samples per second)  */
-  ads.setConvRate(ADS1115_860_SPS); // comment line/change parameter to change SPS
+  // ads.setAlertPinMode(ADS1115_ASSERT_AFTER_1); // needed in this sketch to enable alert pin (doesn't matter if you choose after 1,2 or 4)
 
-  ads.setMeasureMode(ADS1115_CONTINUOUS); // the conversion ready alert pin also works in continuous mode
+  // /* Set the conversion rate in SPS (samples per second)  */
+  // ads.setConvRate(ADS1115_860_SPS); // comment line/change parameter to change SPS
 
-  ads.setAlertPinToConversionReady(); // needed for this sketch
+  // ads.setMeasureMode(ADS1115_CONTINUOUS); // the conversion ready alert pin also works in continuous mode
 
-  attachInterrupt(digitalPinToInterrupt(interruptPin), convReadyAlert, FALLING);
-  oldTime = micros();
+  // ads.setAlertPinToConversionReady(); // needed for this sketch
 
-  convReady = true;
+  // attachInterrupt(digitalPinToInterrupt(interruptPin), convReadyAlert, FALLING);
+  // oldTime = micros();
 
-  Serial.println("ADS1115 Example Sketch - Continuious, Conversion Ready Alert Pin controlled");
-  Serial.println();
+  // convReady = true;
+
+  // Serial.println("ADS1115 Example Sketch - Continuious, Conversion Ready Alert Pin controlled");
+  // Serial.println();
 
   String epString = ReadInfoEEPROM(EP_Station_Type, 8);
   Station_Type = isNumberic(epString) ? epString.toInt() : Station_Type;
@@ -2764,7 +2797,7 @@ void setup()
 }
 
 unsigned long previousMillis = 0;
-const long interval = 100; // default:100
+const long interval = 10; // default:100
 
 String Txt_SpiralSetting = "";
 String Txt_LineScanSetting = "";
@@ -2774,22 +2807,22 @@ int LoopCount = 0;
 
 void loop()
 {
-  unsigned long currentMillis = millis();
-  currentMillis - previousMillis >= interval;
+  // unsigned long currentMillis = millis();
+  // currentMillis - previousMillis >= interval;
 
-  if (currentMillis - previousMillis >= interval)
+  // if (currentMillis - previousMillis >= interval)
   {
-    if (isKeepGetIL)
-    {
-      while (!isStop)
-      {
-        SendIL();
-        delay(1);
-      }
-    }
+    // if (isKeepGetIL)
+    // {
+    //   while (!isStop)
+    //   {
+    //     SendIL();
+    //     delay(1);
+    //   }
+    // }
 
-    LoopCount++;
-    previousMillis = currentMillis;
+    // LoopCount++;
+    // previousMillis = currentMillis;
 
     // count = 0;
     // while (count < 20)
@@ -2833,7 +2866,10 @@ void loop()
       rsMsg = Serial.readString();
       cmd = rsMsg;
       if (cmd != "")
+      {
         Motor_Continous_Mode = 2;
+        // MSGOutput("GetCmd : " + String(cmd));
+      }
     }
 
     if (cmd_from_contr != "")
@@ -2865,39 +2901,39 @@ void loop()
     cmd_No = Function_Excecutation(cmd, cmd_No);
 
     // isGetPower
-    if (isGetPower && (LoopCount >= 5) && cmd_No <= 100)
-    {
-      LoopCount = 0;
-      if (true)
-      {
-        double value;
+    // if (isGetPower && (LoopCount >= 5) && cmd_No <= 100)
+    // {
+    //   LoopCount = 0;
+    //   if (true)
+    //   {
+    //     double value;
 
-        switch (GetPower_Mode)
-        {
-        case 1:
-          value = Cal_PD_Input_IL(Get_PD_Points);
-          break;
+    //     switch (GetPower_Mode)
+    //     {
+    //     case 1:
+    //       value = Cal_PD_Input_IL(Get_PD_Points);
+    //       break;
 
-        case 2:
-          value = Cal_PD_Input_Dac(Get_PD_Points);
-          break;
+    //     case 2:
+    //       value = Cal_PD_Input_Dac(Get_PD_Points);
+    //       break;
 
-        case 3:
-          value = Cal_PD_Input_Row_IL(Get_PD_Points);
-          break;
+    //     case 3:
+    //       value = Cal_PD_Input_Row_IL(Get_PD_Points);
+    //       break;
 
-        case 4:
-          value = Cal_PD_Input_Row_Dac(Get_PD_Points);
-          break;
+    //     case 4:
+    //       value = Cal_PD_Input_Row_Dac(Get_PD_Points);
+    //       break;
 
-        default:
-          break;
-        }
+    //     default:
+    //       break;
+    //     }
 
-        MSGOutput("PD_Power:" + String(value));       // dB
-        DataSent_Server("PD_Power:" + String(value)); // Send to Server and check is connected or not !!
-      }
-    }
+    //     MSGOutput("PD_Power:" + String(value));       // dB
+    //     DataSent_Server("PD_Power:" + String(value)); // Send to Server and check is connected or not !!
+    //   }
+    // }
 
     cmd_from_contr = "";
     cmd_value_from_contr = "";
@@ -4865,32 +4901,17 @@ int Function_Classification(String cmd, int ButtonSelected)
         dirPin = X_DIR_Pin;
         stpPin = X_STP_Pin;
         delayNow = delayBetweenStep_X;
-
-        // if (Contains(cmd, "m"))
-        //   dirt = X_DIR_False;
-        // else if (Contains(cmd, "p"))
-        //   dirt = X_DIR_True;
       }
       else if (Contains(cmd, "Y"))
       {
         dirPin = Y_DIR_Pin;
         stpPin = Y_STP_Pin;
-
-        // if (Contains(cmd, "m"))
-        //   dirt = Y_DIR_False;
-        // else if (Contains(cmd, "p"))
-        //   dirt = Y_DIR_True;
       }
       else if (Contains(cmd, "Z"))
       {
         dirPin = Z_DIR_Pin;
         stpPin = Z_STP_Pin;
         delayNow = delayBetweenStep_Z;
-
-        // if (Contains(cmd, "m"))
-        //   dirt = Z_DIR_False;
-        // else if (Contains(cmd, "p"))
-        //   dirt = Z_DIR_True;
       }
 
       cmd.remove(0, 1);
@@ -4936,6 +4957,8 @@ int Function_Classification(String cmd, int ButtonSelected)
 
       cmd.remove(0, 2);
 
+      isCheckStop = true;
+
       Move_Motor_abs(xyz, cmd.toDouble());
 
       return 0;
@@ -4957,6 +4980,8 @@ int Function_Classification(String cmd, int ButtonSelected)
       cmd.remove(0, cmd.indexOf('_') + 1);
 
       travel_z = cmd.substring(0, cmd.indexOf('_')).toDouble();
+
+      isCheckStop = true;
 
       Move_Motor_abs_all(travel_x, travel_y, travel_z);
 
@@ -5457,19 +5482,22 @@ int Function_Msg_Classification(String cmd, int ButtonSelected)
           if (Contains(cmd, "X"))
           {
             delayBetweenStep_X = value.toInt();
-            WR_EEPROM(EP_delayBetweenStep_X, value);
+            // WR_EEPROM(EP_delayBetweenStep_X, value);
+            WriteInfoEEPROM(EP_delayBetweenStep_X, value, 8); // Write Data to EEPROM (data, start_position, MaxDataLength)
             MSGOutput("Set Motor X Speed:" + value);
           }
           else if (Contains(cmd, "Y"))
           {
             delayBetweenStep_Y = value.toInt();
-            WR_EEPROM(EP_delayBetweenStep_Y, value);
+            // WR_EEPROM(EP_delayBetweenStep_Y, value);
+            WriteInfoEEPROM(EP_delayBetweenStep_Y, value, 8); // Write Data to EEPROM (data, start_position, MaxDataLength)
             MSGOutput("Set Motor Y Speed:" + value);
           }
           else if (Contains(cmd, "Z"))
           {
             delayBetweenStep_Z = value.toInt();
-            WR_EEPROM(EP_delayBetweenStep_Z, value);
+            // WR_EEPROM(EP_delayBetweenStep_Z, value);
+            WriteInfoEEPROM(EP_delayBetweenStep_Z, value, 8); // Write Data to EEPROM (data, start_position, MaxDataLength)
             MSGOutput("Set Motor Z Speed:" + value);
           }
         }
@@ -5488,7 +5516,11 @@ int Function_Msg_Classification(String cmd, int ButtonSelected)
           if (isInteger(sx))
           {
             delayBetweenStep_X = sx.toInt();
-            WR_EEPROM(EP_delayBetweenStep_X, sx);
+
+            WriteInfoEEPROM(EP_delayBetweenStep_X, sx, 8); // Write Data to EEPROM (data, start_position)
+            // CleanEEPROM(EP_delayBetweenStep_X, 8);      // Clean EEPROM(int startPosition, int datalength)
+            // WriteInfoEEPROM(sx, EP_delayBetweenStep_X); // Write Data to EEPROM (data, start_position)
+            // WR_EEPROM(EP_delayBetweenStep_X, sx);
           }
           else
             MSGOutput("Set Motor Speed X Failed: " + sx);
@@ -5499,7 +5531,9 @@ int Function_Msg_Classification(String cmd, int ButtonSelected)
           if (isInteger(sy))
           {
             delayBetweenStep_Y = sy.toInt();
-            WR_EEPROM(EP_delayBetweenStep_Y, sy);
+            // CleanEEPROM(EP_delayBetweenStep_Y, 8);      // Clean EEPROM(int startPosition, int datalength)
+            WriteInfoEEPROM(EP_delayBetweenStep_Y, sy, 8); // Write Data to EEPROM (data, start_position)
+            // WR_EEPROM(EP_delayBetweenStep_Y, sy);
           }
           else
             MSGOutput("Set Motor Speed Y Failed: " + sy);
@@ -5510,7 +5544,9 @@ int Function_Msg_Classification(String cmd, int ButtonSelected)
           if (isInteger(sz))
           {
             delayBetweenStep_Z = sz.toInt();
-            WR_EEPROM(EP_delayBetweenStep_Z, sz);
+            // CleanEEPROM(EP_delayBetweenStep_Z, 8);      // Clean EEPROM(int startPosition, int datalength)
+            WriteInfoEEPROM(EP_delayBetweenStep_Z, sz, 8); // Write Data to EEPROM (data, start_position)
+            // WR_EEPROM(EP_delayBetweenStep_Z, sz);
           }
           else
             MSGOutput("Set Motor Speed Z Failed: " + sz);
@@ -6092,8 +6128,8 @@ int Function_Msg_Classification(String cmd, int ButtonSelected)
 
             averagePDInput = 0;
             for (int i = 0; i < 20; i++)
-              averagePDInput += ads.getResult_V(); // alternative: getResult_mV for Millivolt
-            // averagePDInput += ads.readADC_SingleEnded(0);
+              // averagePDInput += ads.getResult_V(); // alternative: getResult_mV for Millivolt
+              averagePDInput += ads.readADC_SingleEnded(0);
 
             averagePDInput = (averagePDInput / 20);
 
@@ -6848,8 +6884,8 @@ int Function_Excecutation(String cmd, int cmd_No)
 
           averagePDInput = 0;
           for (int i = 0; i < 20; i++)
-            averagePDInput += ads.getRawResult(); // alternative: getResult_mV for Millivolt
-          // averagePDInput += ads.readADC_SingleEnded(0);
+            // averagePDInput += ads.getRawResult(); // alternative: getResult_mV for Millivolt
+            averagePDInput += ads.readADC_SingleEnded(0);
 
           averagePDInput = (averagePDInput / 20);
 
@@ -7236,7 +7272,7 @@ int Function_Excecutation(String cmd, int cmd_No)
           digitalWrite(X_DIR_Pin, Direction);
           delayMicroseconds(10);
           MotorCC_X = digitalRead(X_DIR_Pin);
-          Scan_AllRange_TwoWay(XYZ, count, motorStepC * MotorStepRatio, stableDelay, MotorCC_X, delayBetweenStep, StopValueC, Get_PD_Points, Trips, "X Fine-Scan,", SlopeC);
+          Scan_AllRange_TwoWay(XYZ, count, motorStepC * MotorStepRatio, stableDelay, MotorCC_X, delayBetweenStep, StopValueC, Get_PD_Points, Trips, " Fine-Scan, Trip_", SlopeC);
         }
         else
         {
@@ -7623,7 +7659,7 @@ void CheckStop()
     // if (cmd_No == 30){
     //   isStop = true;
 
-    //   Serial.println("EmergencyStop");
+    // Serial.println("task:" + cmd);
     //   // EmergencyStop();
     // }
     if (Contains(cmd, "cmd30"))

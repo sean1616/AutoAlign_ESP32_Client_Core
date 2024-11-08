@@ -42,8 +42,8 @@ double Cal_PD_Input_Dac(int averageCount)
   double PDAvgInput = 0;
   for (int i = 0; i < averageCount; i++)
   {
-    PDAvgInput += ads.getRawResult();
-    // PDAvgInput += ads.readADC_SingleEnded(0);
+    // PDAvgInput += ads.getRawResult();
+    PDAvgInput += ads.readADC_SingleEnded(0);
   }
 
   // Function: (PD Value) - (reference) + 300
@@ -72,8 +72,8 @@ double Cal_PD_Input_IL(int averageCount)
 
   for (int i = 0; i < averageCount; i++)
   {
-    PDAvgInput += ads.getRawResult();
-    // PDAvgInput += ads.readADC_SingleEnded(0);
+    // PDAvgInput += ads.getRawResult();
+    PDAvgInput += ads.readADC_SingleEnded(0);
   }
 
   averagePDInput = (PDAvgInput / averageCount);
@@ -102,8 +102,8 @@ double Cal_PD_Input_Row_IL(int averageCount)
   double PDAvgInput = 0;
   for (int i = 0; i < averageCount; i++)
   {
-    PDAvgInput += ads.getRawResult();
-    // PDAvgInput += ads.readADC_SingleEnded(0);
+    // PDAvgInput += ads.getRawResult();
+    PDAvgInput += ads.readADC_SingleEnded(0);
   }
   // Function: (PD Value)
   averagePDInput = (PDAvgInput / averageCount);
@@ -132,8 +132,8 @@ double Cal_PD_Input_Row_Dac(int averageCount)
   double PDAvgInput = 0;
   for (int i = 0; i < averageCount; i++)
   {
-    PDAvgInput += ads.getRawResult();
-    // PDAvgInput += ads.readADC_SingleEnded(0);
+    // PDAvgInput += ads.getRawResult();
+    PDAvgInput += ads.readADC_SingleEnded(0);
   }
   averagePDInput = (PDAvgInput / averageCount);
 
@@ -439,96 +439,11 @@ void step(byte stepperPin, long steps, int delayTime, bool dirt_input)
   }
 }
 
-// void step(byte stepperPin, long steps, int delayTime, byte dirPin, bool dir)
-// {
-//   // steps = abs(steps);
-//   digitalWrite(dirPin, dir);
-
-//   for (long i = 0; i < steps; i++)
-//   {
-//     digitalWrite(stepperPin, HIGH);
-//     delayMicroseconds(delayTime);
-//     digitalWrite(stepperPin, LOW);
-//     delayMicroseconds(delayTime);
-
-//     if (isStop)
-//     {
-//       steps -= (i + 1);
-//       break;
-//     }
-//   }
-
-//   bool dirc = false, dir_Judge = true;
-
-//   if (stepperPin == X_STP_Pin)
-//   {
-//     dirc = digitalRead(X_DIR_Pin);
-//     if (IsDirtReverse_X)
-//     {
-//       dir_Judge = false;
-//     }
-//   }
-//   else if (stepperPin == Y_STP_Pin)
-//   {
-//     dirc = digitalRead(Y_DIR_Pin);
-//     if (IsDirtReverse_Y)
-//     {
-//       dir_Judge = false;
-//     }
-//   }
-//   else if (stepperPin == Z_STP_Pin)
-//   {
-//     dirc = digitalRead(Z_DIR_Pin);
-//     if (IsDirtReverse_Z)
-//     {
-//       dir_Judge = false;
-//     }
-//   }
-
-//   // Position Record
-//   if (dirc == dir_Judge)
-//   {
-//     switch (stepperPin)
-//     {
-//     case X_STP_Pin:
-//       Pos_Now.X += steps;
-//       MotorCC_X = true;
-//       break;
-//     case Y_STP_Pin:
-//       Pos_Now.Y += steps;
-//       MotorCC_Y = true;
-//       break;
-//     case Z_STP_Pin:
-//       Pos_Now.Z += steps;
-//       MotorCC_Z = true;
-//       break;
-//     }
-//   }
-//   else
-//   {
-//     switch (stepperPin)
-//     {
-//     case X_STP_Pin:
-//       Pos_Now.X -= steps;
-//       MotorCC_X = false;
-//       break;
-//     case Y_STP_Pin:
-//       Pos_Now.Y -= steps;
-//       MotorCC_Y = false;
-//       break;
-//     case Z_STP_Pin:
-//       Pos_Now.Z -= steps;
-//       MotorCC_Z = false;
-//       break;
-//     }
-//   }
-// }
-
 void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delayStep, int stableDelay, bool isOutputPosition, int pinDelay)
 {
   if (moveSteps > 0)
   {
-    unsigned long preMillis = millis();
+    // unsigned long preMillis = millis();
 
     step(stp_pin, moveSteps, delayStep, dirt);
 
@@ -545,7 +460,7 @@ void Move_Motor(byte dir_pin, byte stp_pin, bool dirt, long moveSteps, int delay
 
     unsigned long currentMillis = millis();
 
-    MSGOutput("ts:" + String(currentMillis - preMillis) + " ms");
+    // MSGOutput("ts:" + String(currentMillis - preMillis) + " ms");
   }
 }
 
@@ -720,55 +635,32 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT)
   long Delta_Y = TargetPos.Y - Pos_Now.Y;
   long Delta_Z = TargetPos.Z - Pos_Now.Z;
 
+  int Sign_Delta_X = (Delta_X > 0) ? 1 : (Delta_X < 0) ? -1
+                                                       : 0;
+  int Sign_Delta_Y = (Delta_Y > 0) ? 1 : (Delta_Y < 0) ? -1
+                                                       : 0;
+  int Sign_Delta_Z = (Delta_Z > 0) ? 1 : (Delta_Z < 0) ? -1
+                                                       : 0;
+
   bool DIRX = false;
   bool DIRY = false;
   bool DIRZ = false;
 
   // 判斷方向
   if (Delta_X > 0)
-  {
-    if (!IsDirtReverse_X)
-      DIRX = true;
-    else
-      DIRX = false;
-  }
+    DIRX = (!IsDirtReverse_X) ? true : false;
   else if (Delta_X < 0)
-  {
-    if (!IsDirtReverse_X)
-      DIRX = false;
-    else
-      DIRX = true;
-  }
+    DIRX = (!IsDirtReverse_X) ? false : true;
 
   if (Delta_Y > 0)
-  {
-    if (!IsDirtReverse_Y)
-      DIRY = true;
-    else
-      DIRY = false;
-  }
+    DIRY = (!IsDirtReverse_Y) ? true : false;
   else if (Delta_Y < 0)
-  {
-    if (!IsDirtReverse_Y)
-      DIRY = false;
-    else
-      DIRY = true;
-  }
+    DIRY = (!IsDirtReverse_Y) ? false : true;
 
   if (Delta_Z > 0)
-  {
-    if (!IsDirtReverse_Z)
-      DIRZ = true;
-    else
-      DIRZ = false;
-  }
+    DIRZ = (!IsDirtReverse_Z) ? true : false;
   else if (Delta_Z < 0)
-  {
-    if (!IsDirtReverse_Z)
-      DIRZ = false;
-    else
-      DIRZ = true;
-  }
+    DIRZ = (!IsDirtReverse_Z) ? false : true;
 
   // 設定軸方向
   if (Delta_X != 0)
@@ -780,16 +672,10 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT)
   if (Delta_Z != 0)
     digitalWrite(Z_DIR_Pin, DIRZ);
 
-  // 依三軸的先前方向判斷是否需要下delay
-  //  delayMicroseconds(300);
-  //  delay(3);
-
   // 計算分時時間
   byte MoveAxisCount = 0;
 
-  bool is_X = false;
-  bool is_Y = false;
-  bool is_Z = false;
+  bool is_X = false, is_Y = false, is_Z = false;
 
   if (Delta_X != 0)
   {
@@ -820,7 +706,7 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT)
   Delta_Y = abs(Delta_Y);
   Delta_Z = abs(Delta_Z);
 
-  // 計算最大的Delta 值
+  // 計算所有軸中最大的Delta 值
   long max = (Delta_X > Delta_Y) ? ((Delta_X > Delta_Z) ? Delta_X : Delta_Z) : ((Delta_Y > Delta_Z) ? Delta_Y : Delta_Z);
 
   int ratio_X = Delta_X == 0 ? 1 : (max / Delta_X);
@@ -857,8 +743,8 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT)
       digitalWrite(X_STP_Pin, LOW);
 
       Delta_X--;
-      if (Delta_X == 0)
-        is_X = false;
+
+      is_X = (Delta_X == 0) ? false : true; // X軸已到達目的地
     }
 
     if (is_Y && is_Y_Temp)
@@ -867,7 +753,7 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT)
 
       Delta_Y--;
       if (Delta_Y == 0)
-        is_Y = false;
+        is_Y = false; // Y軸已到達目的地
     }
 
     if (is_Z && is_Z_Temp)
@@ -876,7 +762,7 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT)
 
       Delta_Z--;
       if (Delta_Z == 0)
-        is_Z = false;
+        is_Z = false; // Z軸已到達目的地
     }
 
     delayMicroseconds(DelayT);
@@ -885,19 +771,31 @@ void Move_Motor_abs_sync(struct_Motor_Pos TargetPos, int DelayT)
     if (Count_Step > ratio_max)
       Count_Step = Count_Step % ratio_max;
 
+    // Stop Condition
     if (isStop)
+    {
+      // Position Record
+      Pos_Now.X = TargetPos.X - (Sign_Delta_X * Delta_X);
+      Pos_Now.Y = TargetPos.Y - (Sign_Delta_Y * Delta_Y);
+      Pos_Now.Z = TargetPos.Z - (Sign_Delta_Z * Delta_Z);
+
       return;
+    }
   }
 
-  // // Position Record
-  Pos_Now.X = TargetPos.X;
-  Pos_Now.Y = TargetPos.Y;
-  Pos_Now.Z = TargetPos.Z;
+  // Position Record
+  Pos_Now.X = TargetPos.X - (Sign_Delta_X * Delta_X);
+  Pos_Now.Y = TargetPos.Y - (Sign_Delta_Y * Delta_Y);
+  Pos_Now.Z = TargetPos.Z - (Sign_Delta_Z * Delta_Z);
+
+  // Pos_Now.X = TargetPos.X;
+  // Pos_Now.Y = TargetPos.Y;
+  // Pos_Now.Z = TargetPos.Z;
 }
 
 void Move_Motor_abs_all(long x, long y, long z, int DelayT)
 {
-  unsigned long preMillis = millis();
+  // unsigned long preMillis = millis();
   // MSGOutput("DelayT:" + String(DelayT) + " us");
 
   struct_Motor_Pos TargetPos;
@@ -906,12 +804,11 @@ void Move_Motor_abs_all(long x, long y, long z, int DelayT)
   TargetPos.Z = z;
   Move_Motor_abs_sync(TargetPos, DelayT);
 
-  // MSGOutput("Move All Abs End");
   DataOutput(false);
 
-  unsigned long currentMillis = millis();
+  // unsigned long currentMillis = millis();
 
-  MSGOutput("ts:" + String(currentMillis - preMillis) + " ms");
+  // MSGOutput("ts:" + String(currentMillis - preMillis) + " ms");
 }
 
 void Move_Motor_abs_all(int x, int y, int z, bool IsMsg, int DelayT)

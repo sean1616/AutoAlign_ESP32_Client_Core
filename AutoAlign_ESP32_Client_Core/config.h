@@ -3,13 +3,13 @@
 
 #include "Arduino.h"
 #include "ep_adrs.h"
-#include <Wire.h>
+// #include <Wire.h>
 #include <Adafruit_ADS1X15.h>
 
-#include <Streaming.h> //  from "Streaming by Mikal Hart" in library manager
-#include <ADS1115_WE.h>
-#include <Wire.h>
-#define I2C_ADDRESS 0x48
+// #include <Streaming.h> //  from "Streaming by Mikal Hart" in library manager
+// #include <ADS1115_WE.h>
+// #include <Wire.h>
+// #define I2C_ADDRESS 0x48
 
 /// @brief 0 is CTF, 1 is VOA-Heater, 2 is VOA-No Heater, 3 is 3D Switch/WOA, 4 is 3D Switch Passive Align
 byte Station_Type = 0;
@@ -34,29 +34,29 @@ const byte Heater_Stop_Pin = 14;
 // pin = 13
 int Tablet_PD_mode_Trigger_Pin = 13;
 
-// Adafruit_ADS1115 ads;
-// TwoWire I2CADS = TwoWire(1);
+Adafruit_ADS1115 ads;
+TwoWire I2CADS = TwoWire(1);
 
-// #define I2C_SDA 21 // 21
-// #define I2C_SCL 22 // 22
+#define I2C_SDA 21 // 21
+#define I2C_SCL 22 // 22
 
-volatile bool convReady = false;
-ADS1115_WE ads = ADS1115_WE(I2C_ADDRESS);
-const uint8_t interruptPin = 21; // pin21 is default SDA
+// volatile bool convReady = false;
+// ADS1115_WE ads = ADS1115_WE(I2C_ADDRESS);
+// const uint8_t interruptPin = 21; // pin21 is default SDA
 
-void IRAM_ATTR convReadyAlert()
-{
-  convReady = true;
-}
+// void IRAM_ATTR convReadyAlert()
+// {
+//   convReady = true;
+// }
 
-struct ConvertData
-{
-  uint32_t cvtTime;
-  float voltage;
-};
+// struct ConvertData
+// {
+//   uint32_t cvtTime;
+//   float voltage;
+// };
 
-ConvertData readData[20];
-unsigned long oldTime, currTime;
+// ConvertData readData[20];
+// unsigned long oldTime, currTime;
 
 typedef struct struct_Motor_Pos
 {
